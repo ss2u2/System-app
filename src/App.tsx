@@ -80,9 +80,7 @@ function AuthenticatedApp() {
   return (
     <div className="app-container">
       {/* 1. Header Bar */}
-      {activeTab !== 'tasks' && (
-        <TopBar onOpenSyncModal={() => setIsSyncModalOpen(true)} />
-      )}
+      <TopBar onOpenSyncModal={() => setIsSyncModalOpen(true)} activeTab={activeTab} />
 
       {/* 2. Scrollable Body Views */}
       <div className="app-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0, overflow: 'hidden' }}>
@@ -96,7 +94,6 @@ function AuthenticatedApp() {
         {activeTab === 'tasks' && (
           <TasksView
             state={state}
-            onOpenSyncModal={() => setIsSyncModalOpen(true)}
           />
         )}
 

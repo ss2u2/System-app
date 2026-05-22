@@ -97,6 +97,8 @@ export interface CustomTask {
   done: boolean;
   starred: boolean;
   createdAt: number;
+  date?: string;
+  time?: string;
 }
 
 

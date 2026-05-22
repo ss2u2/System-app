@@ -5,9 +5,10 @@ import { useTheme } from '../App';
 
 interface TopBarProps {
   onOpenSyncModal: () => void;
+  activeTab?: string;
 }
 
-export default function TopBar({ onOpenSyncModal }: TopBarProps) {
+export default function TopBar({ onOpenSyncModal, activeTab }: TopBarProps) {
   const [dateStr, setDateStr] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -56,8 +57,26 @@ export default function TopBar({ onOpenSyncModal }: TopBarProps) {
 
   return (
     <div className="topbar">
-      <div className="content-wrapper">
-        <div className="topdate" style={{ fontSize: '14px', fontWeight: '500' }}>{dateStr}</div>
+      <div className="content-wrapper" style={{ position: 'relative' }}>
+        <div className="topdate" style={{ fontSize: '14px', fontWeight: '500', opacity: activeTab === 'tasks' ? 0 : 1 }}>
+          {dateStr}
+        </div>
+
+        {/* Center Title for Tasks Tab */}
+        {activeTab === 'tasks' && (
+          <div style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: '16px',
+            fontWeight: '700',
+            color: 'var(--text)',
+            pointerEvents: 'none',
+            letterSpacing: '0.2px',
+          }}>
+            Tasks
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* Sync indicator */}
@@ -85,26 +104,27 @@ export default function TopBar({ onOpenSyncModal }: TopBarProps) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: 32,
-                  height: 32,
+                  width: 36,
+                  height: 36,
                   borderRadius: '50%',
                   background: 'none',
-                  border: '1px solid transparent',
+                  border: '2px solid var(--green)',
                   cursor: 'pointer',
                   padding: 0,
                   transition: 'all 0.2s',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  overflow: 'hidden',
                 }}
                 onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                 onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
               >
                 {/* Avatar */}
                 <div style={{
-                  width: '100%', height: '100%', borderRadius: '50%',
+                  width: '100%', height: '100%',
                   background: 'linear-gradient(135deg, var(--accent), var(--accent2))',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
                   overflow: 'hidden',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                 }}>
                   {getAvatarUrl()
                     ? <img src={getAvatarUrl()} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

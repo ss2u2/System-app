@@ -32,7 +32,6 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
 
   // Modal Fields
   const [taskName, setTaskName] = useState('');
-  const [taskCat, setTaskCat] = useState('work');
 
   const [sessionName, setSessionName] = useState('');
   const [sessionIcon, setSessionIcon] = useState('🏋️');
@@ -47,7 +46,6 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
   const [lifeGoalName, setLifeGoalName] = useState('');
   const [lifeGoalEmoji, setLifeGoalEmoji] = useState('🎯');
   const [lifeGoalNote, setLifeGoalNote] = useState('');
-  const [lifeGoalCat, setLifeGoalCat] = useState('life');
 
   const colorMap: Record<string, string> = {
     accent: '#7c6af7',
@@ -127,7 +125,7 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
     const newTask: Task = {
       id: Date.now(),
       name: taskName.trim(),
-      cat: taskCat,
+      cat: '',
       done: false,
     };
     store.setState({ tasks: [...state.tasks, newTask] });
@@ -197,7 +195,7 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
       name: lifeGoalName.trim(),
       emoji: lifeGoalEmoji.trim() || '🎯',
       note: lifeGoalNote.trim(),
-      cat: lifeGoalCat,
+      cat: '',
       progress: 0,
     };
     store.setState({ static: [...state.static, newLifeGoal] });
@@ -383,14 +381,33 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
                 getToadyTasks().map((t) => (
                   <div
                     key={t.id}
-                    className={`task-item ${t.done ? 'done' : ''}`}
+                    className={`custom-task-row ${t.done ? 'done' : ''}`}
                     onClick={() => toggleTask(t.id)}
                   >
-                    <div className="task-cb">
-                      <IconCheck size={10} />
+                    <div className={`custom-task-checkbox ${t.done ? 'done' : ''}`}>
+                      {t.done ? (
+                        <IconCheck size={10} strokeWidth={3} />
+                      ) : (
+                        <div className="checkbox-inner" />
+                      )}
                     </div>
-                    <div className="task-name">{t.name}</div>
-                    <span className={`task-badge badge-${t.cat}`}>{t.cat}</span>
+                    <div className="custom-task-details">
+                      <span className="custom-task-name">{t.name}</span>
+                    </div>
+                    <div className="custom-task-actions">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Delete "${t.name}"?`)) {
+                            const updated = state.tasks.filter((x) => x.id !== t.id);
+                            store.setState({ tasks: updated });
+                          }
+                        }}
+                        className="custom-task-delete-btn"
+                      >
+                        <IconTrash size={16} />
+                      </button>
+                    </div>
                   </div>
                 ))
               ) : (
@@ -592,7 +609,6 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
                           <div className="static-name">{g.name}</div>
                           {g.note && <div className="static-note">{g.note}</div>}
                         </div>
-                        <span className={`static-tag tag-${g.cat}`}>{g.cat}</span>
                       </div>
                       <div className="static-bottom">
                         <div className="static-status-row">
@@ -653,19 +669,6 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
                   autoFocus
                   required
                 />
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-task-cat">Category</label>
-                <select
-                  id="modal-task-cat"
-                  value={taskCat}
-                  onChange={(e) => setTaskCat(e.target.value)}
-                >
-                  <option value="work">Work</option>
-                  <option value="health">Health</option>
-                  <option value="mind">Mind</option>
-                  <option value="other">Other</option>
-                </select>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn-cancel" onClick={() => setActiveModal(null)}>
@@ -851,20 +854,6 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
                   value={lifeGoalNote}
                   onChange={(e) => setLifeGoalNote(e.target.value)}
                 />
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-life-cat">Category</label>
-                <select
-                  id="modal-life-cat"
-                  value={lifeGoalCat}
-                  onChange={(e) => setLifeGoalCat(e.target.value)}
-                >
-                  <option value="life">Life</option>
-                  <option value="finance">Finance</option>
-                  <option value="career">Career</option>
-                  <option value="health">Health</option>
-                  <option value="other">Other</option>
-                </select>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn-cancel" onClick={() => setActiveModal(null)}>

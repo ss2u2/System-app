@@ -29,37 +29,82 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return;
     }
 
-    // Get the current session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadUserData();
-        setupRealtimeSubscription(session.user.id);
-      }
-    });
+    let isMounted = true;
+    let subscription: any = null;
 
-    // Subscribe to future auth changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+    // Safety timeout: if auth initialization doesn't finish in 3.5 seconds,
+    // fallback to local-only mode to prevent indefinite loading splash.
+    const fallbackTimeout = setTimeout(() => {
+      if (isMounted && user === undefined) {
+        console.warn('Supabase auth check timed out. Falling back to local-only/unauthenticated state.');
+        setUser(null);
+      }
+    }, 3500);
+
+    // Get the current session on mount
+    supabase.auth.getSession()
+      .then((result) => {
+        if (!isMounted) return;
+        
+        const session = result?.data?.session ?? null;
         setSession(session);
         setUser(session?.user ?? null);
-
-        if (event === 'SIGNED_IN' && session?.user) {
-          await loadUserData();
+        
+        if (session?.user) {
+          loadUserData();
           setupRealtimeSubscription(session.user.id);
         }
+      })
+      .catch((err) => {
+        console.error('Failed to get session from Supabase:', err);
+        if (isMounted) {
+          setSession(null);
+          setUser(null);
+        }
+      })
+      .finally(() => {
+        clearTimeout(fallbackTimeout);
+      });
 
-        if (event === 'SIGNED_OUT') {
-          // Clear local state so a different user doesn't see stale data
-          localStorage.removeItem('system_app_state');
-          store.setState({ _reset: true }, true);
-          cleanupRealtimeSubscription();
+    // Subscribe to future auth changes (login, logout, token refresh)
+    try {
+      const authListener = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (!isMounted) return;
+          
+          setSession(session);
+          setUser(session?.user ?? null);
+
+          if (event === 'SIGNED_IN' && session?.user) {
+            await loadUserData();
+            setupRealtimeSubscription(session.user.id);
+          }
+
+          if (event === 'SIGNED_OUT') {
+            // Clear local state so a different user doesn't see stale data
+            localStorage.removeItem('system_app_state');
+            store.setState({ _reset: true }, true);
+            cleanupRealtimeSubscription();
+          }
+        }
+      );
+      
+      subscription = authListener?.data?.subscription;
+    } catch (err) {
+      console.error('Failed to subscribe to auth state changes:', err);
+    }
+
+    return () => {
+      isMounted = false;
+      clearTimeout(fallbackTimeout);
+      if (subscription) {
+        try {
+          subscription.unsubscribe();
+        } catch (e) {
+          console.warn('Failed to unsubscribe from auth state changes:', e);
         }
       }
-    );
-
-    return () => subscription.unsubscribe();
+    };
   }, []);
 
   async function loadUserData() {

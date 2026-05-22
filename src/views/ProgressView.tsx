@@ -104,7 +104,6 @@ export default function ProgressView({ state }: ProgressViewProps) {
                     <div className="static-name">{g.name}</div>
                     {g.note && <div className="static-note">{g.note}</div>}
                   </div>
-                  <span className={`static-tag tag-${g.cat}`}>{g.cat}</span>
                 </div>
                 <div className="static-bottom">
                   <div className="static-status-row">
