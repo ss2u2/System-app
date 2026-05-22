@@ -13,7 +13,7 @@ import {
 } from '@tabler/icons-react';
 import { store } from '../services/db';
 import { useAuth } from '../context/AuthContext';
-import type { AppState, Task, CustomList, CustomTask } from '../types';
+import type { AppState, Task } from '../types';
 
 interface TasksViewProps {
   state: AppState;
