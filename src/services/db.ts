@@ -2,6 +2,7 @@
 import { triggerSync, registerStore } from './sync';
 import type { AppState, AppStore } from '../types';
 
+
 const LOCAL_STORAGE_KEY = 'system_app_state';
 
 const defaultState: AppState = {
@@ -154,8 +155,9 @@ export const store: AppStore = {
     listeners.forEach(l => l(state));
     
     // Trigger Supabase cloud synchronizer only if not from a remote update
+    // triggerSync reads the latest state from storeRef internally (no stale closure)
     if (!fromRemote) {
-      triggerSync(state);
+      triggerSync();
     }
   },
   subscribe(listener: StoreListener) {
