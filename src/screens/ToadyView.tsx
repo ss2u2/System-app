@@ -11,27 +11,31 @@ import {
   IconCheck,
   IconTrash,
   IconPointFilled,
-  IconPlayerPlay,
   IconClipboard,
 } from '@tabler/icons-react';
 import { store } from '../services/db';
 import type { AppState, Task, Session, WeeklyGoal, MonthlyGoal, StaticGoal } from '../types';
+import TaskItem from '../components/TaskItem';
+import AddTaskModal from '../components/AddTaskModal';
 
 interface ToadyViewProps {
   state: AppState;
-  onStartSession: (idx: number) => void;
+  onEditTask: (id: number) => void;
+  onToggleTask: (id: number) => void;
+  onDeleteTask: (id: number) => void;
 }
 
-type ModalType = 'task' | 'session' | 'goal' | 'static' | null;
-
-export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
+export default function ToadyView({
+  state,
+  onEditTask,
+  onToggleTask,
+  onDeleteTask,
+}: ToadyViewProps) {
+  type ModalType = 'task' | 'session' | 'goal' | 'static' | null;
   const [subTab, setSubTab] = useState<'today' | 'sessions' | 'weekly' | 'monthly' | 'static'>('today');
 
   // Modals state
   const [activeModal, setActiveModal] = useState<ModalType>(null);
-
-  // Modal Fields
-  const [taskName, setTaskName] = useState('');
 
   const [sessionName, setSessionName] = useState('');
   const [sessionIcon, setSessionIcon] = useState('🏋️');
@@ -65,7 +69,7 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
   // Filter tasks that belong to Toady (not part of lists)
   const getToadyTasks = () => {
     return (state.tasks || []).filter(
-      (t) => !t.cat.startsWith('list-item|') && t.cat !== 'list-def'
+      (t) => (!t.cat.startsWith('list-item|') && t.cat !== 'list-def') || t.cat.startsWith('list-item|toady|')
     );
   };
 
@@ -95,9 +99,29 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
     store.setState({ sessions: updated });
   };
 
-  const toggleTask = (id: number) => {
-    const updated = state.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
+  const handleToggleStar = (taskId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = state.tasks.map(t => {
+      if (t.id === taskId) {
+        if (t.cat.startsWith('list-item|')) {
+          const parts = t.cat.split('|');
+          const starred = parts[2] === 'true';
+          parts[2] = (!starred).toString();
+          return { ...t, cat: parts.join('|') };
+        } else {
+          return { ...t, cat: `list-item|toady|true|${t.id}|||none|` };
+        }
+      }
+      return t;
+    });
     store.setState({ tasks: updated });
+  };
+
+  const handleDeleteTask = (taskId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Delete this task?')) {
+      onDeleteTask(taskId);
+    }
   };
 
   const handleDeleteSession = (index: number) => {
@@ -119,18 +143,21 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
   };
 
   // Saves
-  const saveTask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!taskName.trim()) return;
+  const handleSaveNewTask = (taskData: {
+    name: string;
+    date: string;
+    time: string;
+    repeatType: 'none' | 'daily' | 'custom';
+    repeatValue: string;
+  }) => {
+    const newTaskId = Date.now();
     const newTask: Task = {
-      id: Date.now(),
-      name: taskName.trim(),
-      cat: '',
+      id: newTaskId,
+      name: taskData.name,
+      cat: `list-item|toady|false|${Date.now()}|${taskData.date}|${taskData.time}|${taskData.repeatType}|${taskData.repeatValue}`,
       done: false,
     };
     store.setState({ tasks: [...state.tasks, newTask] });
-    setTaskName('');
-    setActiveModal(null);
   };
 
   const saveSession = (e: React.FormEvent) => {
@@ -139,7 +166,7 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
     const steps = sessionSteps
       .split('\n')
       .filter(Boolean)
-      .map((line) => {
+      .map((line: string) => {
         const parts = line.split('|');
         return {
           name: parts[0].trim(),
@@ -343,16 +370,6 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
                             </div>
                           ))}
                         </div>
-                        <button
-                          className="start-btn cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onStartSession(si);
-                          }}
-                        >
-                          <IconPlayerPlay size={14} />
-                          Run Session Flow
-                        </button>
                       </div>
                     </div>
                   );
@@ -379,36 +396,14 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
             <div className="tasks-list">
               {getToadyTasks().length > 0 ? (
                 getToadyTasks().map((t) => (
-                  <div
+                  <TaskItem
                     key={t.id}
-                    className={`custom-task-row ${t.done ? 'done' : ''}`}
-                    onClick={() => toggleTask(t.id)}
-                  >
-                    <div className={`custom-task-checkbox ${t.done ? 'done' : ''}`}>
-                      {t.done ? (
-                        <IconCheck size={10} strokeWidth={3} />
-                      ) : (
-                        <div className="checkbox-inner" />
-                      )}
-                    </div>
-                    <div className="custom-task-details">
-                      <span className="custom-task-name">{t.name}</span>
-                    </div>
-                    <div className="custom-task-actions">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (window.confirm(`Delete "${t.name}"?`)) {
-                            const updated = state.tasks.filter((x) => x.id !== t.id);
-                            store.setState({ tasks: updated });
-                          }
-                        }}
-                        className="custom-task-delete-btn"
-                      >
-                        <IconTrash size={16} />
-                      </button>
-                    </div>
-                  </div>
+                    task={t}
+                    onToggle={onToggleTask}
+                    onToggleStar={handleToggleStar}
+                    onDelete={handleDeleteTask}
+                    onEdit={onEditTask}
+                  />
                 ))
               ) : (
                 <div className="empty">
@@ -650,38 +645,12 @@ export default function ToadyView({ state, onStartSession }: ToadyViewProps) {
       </div>
 
       {/* ==================== ADD TASK MODAL ==================== */}
-      {activeModal === 'task' && (
-        <div
-          className="modal-overlay open"
-          onClick={(e) => e.target === e.currentTarget && setActiveModal(null)}
-        >
-          <div className="modal">
-            <div className="modal-title">Add Task</div>
-            <form onSubmit={saveTask}>
-              <div className="form-field">
-                <label htmlFor="modal-task-name">Task name</label>
-                <input
-                  id="modal-task-name"
-                  type="text"
-                  placeholder="e.g. Read 20 pages"
-                  value={taskName}
-                  onChange={(e) => setTaskName(e.target.value)}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setActiveModal(null)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-save">
-                  Add Task
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddTaskModal
+        isOpen={activeModal === 'task'}
+        onClose={() => setActiveModal(null)}
+        title="Add Task"
+        onSave={handleSaveNewTask}
+      />
 
       {/* ==================== ADD SESSION MODAL ==================== */}
       {activeModal === 'session' && (

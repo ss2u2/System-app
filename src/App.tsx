@@ -3,14 +3,15 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthScreen from './components/AuthScreen';
 import TopBar from './components/TopBar';
 import BottomNav from './components/BottomNav';
-import ToadyView from './views/ToadyView';
-import TasksView from './views/TasksView';
-import ProgressView from './views/ProgressView';
-import JournalView from './views/JournalView';
-import SessionRunner from './views/SessionRunner';
+import ToadyView from './screens/ToadyView';
+import TasksView from './screens/TasksView';
+import ProgressView from './screens/ProgressView';
+import JournalView from './screens/JournalView';
 import SyncConfig from './components/SyncConfig';
+import TaskDetailView from './components/TaskDetailView';
 import { store } from './services/db';
-import type { AppState } from './types';
+import type { AppState, Task } from './types';
+import { getLocalDateString, getNextOccurrenceDate } from './utils/taskHelper';
 
 // Theme Context Interface
 interface ThemeContextType {
@@ -63,12 +64,14 @@ function LoadingSplash() {
   );
 }
 
+import AppContainer from './components/AppContainer';
+
 /* ─── Inner app (rendered only when user is authenticated) ─── */
 function AuthenticatedApp() {
   const [state, setState] = useState<AppState>(store.getState());
   const [activeTab, setActiveTab] = useState<string>('toady');
-  const [activeSessionIdx, setActiveSessionIdx] = useState<number | null>(null);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = store.subscribe((newState) => {
@@ -77,8 +80,93 @@ function AuthenticatedApp() {
     return unsubscribe;
   }, []);
 
+  const handleGlobalToggleTask = (taskId: number) => {
+    let newTaskToSpawn: Task | null = null;
+    
+    const updated = state.tasks.map(t => {
+      if (t.id === taskId) {
+        const isCompleting = !t.done;
+        
+        if (isCompleting && t.cat.startsWith('list-item|')) {
+          const parts = t.cat.split('|');
+          const repeatTypeVal = parts[6] || 'none';
+          const repeatValueVal = parts[7] || '';
+          
+          if (repeatTypeVal !== 'none') {
+            const currentDateStr = parts[4] || getLocalDateString();
+            const nextDateStr = getNextOccurrenceDate(currentDateStr, repeatTypeVal, repeatValueVal);
+            
+            if (nextDateStr) {
+              const newTaskId = Date.now() + 1;
+              let nextRepeatValue = repeatValueVal;
+              
+              if (repeatTypeVal === 'custom') {
+                try {
+                  const config = JSON.parse(repeatValueVal);
+                  if (config.ends === 'after') {
+                    config.endsAfter = Number(config.endsAfter) - 1;
+                    nextRepeatValue = JSON.stringify(config);
+                  }
+                } catch (e) {
+                  console.error(e);
+                }
+              }
+              
+              const deadline = parts[8] || '';
+              const details = parts[9] || '';
+              let nextSubtasksStr = parts[10] || '';
+              if (nextSubtasksStr) {
+                try {
+                  const subtasks = JSON.parse(decodeURIComponent(nextSubtasksStr));
+                  const resetSubtasks = subtasks.map((st: any) => ({ ...st, done: false }));
+                  nextSubtasksStr = encodeURIComponent(JSON.stringify(resetSubtasks));
+                } catch {}
+              }
+
+              const nextCat = `list-item|${parts[1]}|${parts[2]}|${newTaskId}|${nextDateStr}|${parts[5] || ''}|${repeatTypeVal}|${nextRepeatValue}|${deadline}|${details}|${nextSubtasksStr}`;
+              
+              newTaskToSpawn = {
+                id: newTaskId,
+                name: t.name,
+                cat: nextCat,
+                done: false
+              };
+            }
+            
+            parts[6] = 'none';
+            return {
+              ...t,
+              cat: parts.join('|'),
+              done: true
+            };
+          }
+        }
+        
+        return { ...t, done: !t.done };
+      }
+      return t;
+    });
+    
+    if (newTaskToSpawn) {
+      store.setState({ tasks: [...updated, newTaskToSpawn] });
+    } else {
+      store.setState({ tasks: updated });
+    }
+  };
+
+  const handleGlobalDeleteTask = (taskId: number) => {
+    const updated = state.tasks.filter(t => t.id !== taskId);
+    store.setState({ tasks: updated });
+  };
+
+  // Get active lists for TaskDetailView list selector
+  const lists = (state.tasks || [])
+    .filter(t => t.cat === 'list-def')
+    .map(t => ({ id: t.id, name: t.name }));
+  const allLists = lists.length > 0 ? lists : [{ id: 1001, name: 'My Tasks' }];
+
   return (
-    <div className="app-container">
+    <AppContainer>
       {/* 1. Header Bar */}
       <TopBar onOpenSyncModal={() => setIsSyncModalOpen(true)} activeTab={activeTab} />
 
@@ -87,13 +175,18 @@ function AuthenticatedApp() {
         {activeTab === 'toady' && (
           <ToadyView
             state={state}
-            onStartSession={(idx) => setActiveSessionIdx(idx)}
+            onEditTask={setEditingTaskId}
+            onToggleTask={handleGlobalToggleTask}
+            onDeleteTask={handleGlobalDeleteTask}
           />
         )}
 
         {activeTab === 'tasks' && (
           <TasksView
             state={state}
+            onEditTask={setEditingTaskId}
+            onToggleTask={handleGlobalToggleTask}
+            onDeleteTask={handleGlobalDeleteTask}
           />
         )}
 
@@ -117,15 +210,17 @@ function AuthenticatedApp() {
         onClose={() => setIsSyncModalOpen(false)}
       />
 
-      {/* Timed Session Runner */}
-      {activeSessionIdx !== null && (
-        <SessionRunner
-          state={state}
-          sessionIndex={activeSessionIdx}
-          onClose={() => setActiveSessionIdx(null)}
+      {/* Task Detail Overlay Screen */}
+      {editingTaskId !== null && (
+        <TaskDetailView
+          taskId={editingTaskId}
+          lists={allLists}
+          onClose={() => setEditingTaskId(null)}
+          onDelete={handleGlobalDeleteTask}
+          onToggleComplete={handleGlobalToggleTask}
         />
       )}
-    </div>
+    </AppContainer>
   );
 }
 

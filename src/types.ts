@@ -90,15 +90,25 @@ export interface CustomList {
   name: string;
 }
 
+export interface SubTask {
+  id: number;
+  name: string;
+  done: boolean;
+}
+
 export interface CustomTask {
   id: number;
-  listId: number;
+  listId: number | string;
   name: string;
   done: boolean;
   starred: boolean;
   createdAt: number;
   date?: string;
   time?: string;
+  deadline?: string;
+  details?: string;
+  subtasks?: SubTask[];
 }
+
 
 
