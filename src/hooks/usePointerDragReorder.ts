@@ -11,6 +11,16 @@ export interface UsePointerDragReorderProps<T extends DragItem> {
   enabled: boolean;
 }
 
+function getScrollParent(node: HTMLElement | null): HTMLElement | null {
+  if (!node) return null;
+  const overflowY = window.getComputedStyle(node).overflowY;
+  const isScrollable = overflowY === 'auto' || overflowY === 'scroll';
+  if (isScrollable && node.scrollHeight > node.clientHeight) {
+    return node;
+  }
+  return getScrollParent(node.parentElement);
+}
+
 export function usePointerDragReorder<T extends DragItem>({
   items,
   onReorder,
@@ -83,6 +93,9 @@ export function usePointerDragReorder<T extends DragItem>({
     const container = draggedRow.parentElement;
     if (!container) return;
 
+    const scrollParent = getScrollParent(container);
+    const initialScrollTop = scrollParent ? scrollParent.scrollTop : 0;
+
     // Fetch list rows and filter to our reorderable items
     const rowElements = Array.from(container.children) as HTMLElement[];
     const itemRows = rowElements.filter((el) => el.hasAttribute('data-drag-id'));
@@ -120,13 +133,110 @@ export function usePointerDragReorder<T extends DragItem>({
     let longPressTimer: number | null = null;
     const startX = e.clientX;
     const startY = e.clientY;
+    let lastClientY = e.clientY;
+
+    // Auto-scroll loop states
+    let scrollSpeed = 0; // Positive (scroll down), Negative (scroll up)
+    let scrollIntervalId: number | null = null;
+
+    const updateDragPosition = (currentClientY: number) => {
+      if (!dragInfo.current) return;
+      const info = dragInfo.current;
+      const deltaY = currentClientY - info.startY;
+
+      const currentScrollTop = scrollParent ? scrollParent.scrollTop : 0;
+      const scrollTopDiff = currentScrollTop - initialScrollTop;
+      const adjustedDeltaY = deltaY + scrollTopDiff;
+
+      // Constraint bounds calculation (taking scroll into account)
+      const maxDragUp = info.containerRect.top - info.draggedRect.top + scrollTopDiff;
+      const maxDragDown = info.containerRect.bottom - info.draggedRect.bottom + scrollTopDiff;
+      const constrainedDeltaY = Math.max(maxDragUp, Math.min(maxDragDown, adjustedDeltaY));
+
+      // 1. Update offset ref immediately (so React reads latest values on render)
+      dragOffsetRef.current = constrainedDeltaY;
+
+      // 2. Direct DOM manipulation to bypass React state updates for buttery smooth drag (60/120fps)
+      info.draggedRow.style.transform = `translateY(${constrainedDeltaY}px)`;
+      info.draggedRow.style.zIndex = '100';
+      info.draggedRow.style.position = 'relative';
+      info.draggedRow.style.transition = 'none';
+
+      // Re-evaluate list item positions as they shift due to scrolling
+      const currentElements = Array.from(info.container.children) as HTMLElement[];
+      const activeRows = currentElements.filter((el) => el.hasAttribute('data-drag-id'));
+      const activeRects = activeRows.map((el) => {
+        const rect = el.getBoundingClientRect();
+        const rawId = el.getAttribute('data-drag-id')!;
+        const id: T['id'] = isNaN(Number(rawId)) ? rawId : Number(rawId);
+        return {
+          id,
+          centerY: rect.top + rect.height / 2,
+          height: rect.height,
+        };
+      });
+
+      info.rects = activeRects;
+
+      // Match overlap position to find target reorder item index
+      const currentCenterY = info.draggedRect.top - scrollTopDiff + constrainedDeltaY + info.draggedRect.height / 2;
+      let targetIndex = info.startIndex;
+      
+      if (activeRects.length > 0) {
+        if (currentCenterY <= activeRects[0].centerY) {
+          targetIndex = 0;
+        } else if (currentCenterY >= activeRects[activeRects.length - 1].centerY) {
+          targetIndex = activeRects.length - 1;
+        } else {
+          for (let i = 0; i < activeRects.length - 1; i++) {
+            const current = activeRects[i];
+            const next = activeRects[i + 1];
+            if (currentCenterY >= current.centerY && currentCenterY <= next.centerY) {
+              const distToCurrent = currentCenterY - current.centerY;
+              const distToNext = next.centerY - currentCenterY;
+              targetIndex = distToCurrent < distToNext ? i : i + 1;
+              break;
+            }
+          }
+        }
+      }
+
+      const activeOverId = activeRects[targetIndex]?.id ?? null;
+      
+      // Synchronously check and update overId within our drag ref, scheduling state update
+      if (activeOverId !== info.overId) {
+        info.overId = activeOverId;
+        setOverId(activeOverId);
+      }
+    };
+
+    const startScrollLoop = () => {
+      if (scrollIntervalId !== null) return;
+      scrollIntervalId = window.setInterval(() => {
+        if (!scrollParent) return;
+        const previousScrollTop = scrollParent.scrollTop;
+        scrollParent.scrollTop += scrollSpeed;
+        
+        // If we actually scrolled, update the item's coordinates relative to viewport
+        if (scrollParent.scrollTop !== previousScrollTop) {
+          updateDragPosition(lastClientY);
+        }
+      }, 16); // ~60fps
+    };
+
+    const stopScrollLoop = () => {
+      if (scrollIntervalId !== null) {
+        window.clearInterval(scrollIntervalId);
+        scrollIntervalId = null;
+      }
+    };
 
     if (isTouch) {
       longPressTimer = window.setTimeout(() => {
-        // Trigger burst vibration signal
+        // Trigger burst vibration signal (subtle 10ms micro-tick)
         if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
           try {
-            window.navigator.vibrate(80);
+            window.navigator.vibrate(10);
           } catch (vErr) {
             console.warn("Vibration failed:", vErr);
           }
@@ -158,6 +268,7 @@ export function usePointerDragReorder<T extends DragItem>({
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (!dragInfo.current) return;
       const info = dragInfo.current;
+      lastClientY = moveEvent.clientY;
 
       // Handle touch scroll detection / canceling long press
       if (isTouch && !isDraggingAllowed) {
@@ -188,52 +299,34 @@ export function usePointerDragReorder<T extends DragItem>({
         }
       }
 
-      moveEvent.preventDefault();
+      // Update dragging coordinates
+      updateDragPosition(moveEvent.clientY);
 
-      // Constraint bounds calculation
-      const maxDragUp = info.containerRect.top - info.draggedRect.top;
-      const maxDragDown = info.containerRect.bottom - info.draggedRect.bottom;
-      const constrainedDeltaY = Math.max(maxDragUp, Math.min(maxDragDown, deltaY));
+      // Handle boundary scrolling zone detection
+      if (scrollParent && isDraggingAllowed) {
+        const scrollRect = scrollParent.getBoundingClientRect();
+        const pointerY = moveEvent.clientY;
+        const threshold = 50; // zone size from top/bottom to trigger scrolling
 
-      // 1. Update offset ref immediately (so React reads latest values on render)
-      dragOffsetRef.current = constrainedDeltaY;
-
-      // 2. Direct DOM manipulation to bypass React state updates for buttery smooth drag (60/120fps)
-      info.draggedRow.style.transform = `translateY(${constrainedDeltaY}px)`;
-      info.draggedRow.style.zIndex = '100';
-      info.draggedRow.style.position = 'relative';
-      info.draggedRow.style.transition = 'none';
-
-      // Match overlap position to find target reorder item index
-      const currentCenterY = info.draggedRect.top + info.draggedRect.height / 2 + constrainedDeltaY;
-      let targetIndex = info.startIndex;
-      const rectsList = info.rects;
-
-      if (rectsList.length > 0) {
-        if (currentCenterY <= rectsList[0].centerY) {
-          targetIndex = 0;
-        } else if (currentCenterY >= rectsList[rectsList.length - 1].centerY) {
-          targetIndex = rectsList.length - 1;
+        if (pointerY < scrollRect.top + threshold) {
+          const intensity = (scrollRect.top + threshold - pointerY) / threshold;
+          scrollSpeed = -Math.max(1, Math.min(8, intensity * 5));
+          startScrollLoop();
+        } else if (pointerY > scrollRect.bottom - threshold) {
+          const intensity = (pointerY - (scrollRect.bottom - threshold)) / threshold;
+          scrollSpeed = Math.max(1, Math.min(8, intensity * 5));
+          startScrollLoop();
         } else {
-          for (let i = 0; i < rectsList.length - 1; i++) {
-            const current = rectsList[i];
-            const next = rectsList[i + 1];
-            if (currentCenterY >= current.centerY && currentCenterY <= next.centerY) {
-              const distToCurrent = currentCenterY - current.centerY;
-              const distToNext = next.centerY - currentCenterY;
-              targetIndex = distToCurrent < distToNext ? i : i + 1;
-              break;
-            }
-          }
+          scrollSpeed = 0;
+          stopScrollLoop();
         }
       }
+    };
 
-      const activeOverId = rectsList[targetIndex]?.id ?? null;
-      
-      // Synchronously check and update overId within our drag ref, scheduling state update
-      if (activeOverId !== info.overId) {
-        info.overId = activeOverId;
-        setOverId(activeOverId);
+    const handleTouchMove = (touchEvent: TouchEvent) => {
+      // Actively block browser scrolling if long press has activated
+      if (isDraggingAllowed) {
+        touchEvent.preventDefault();
       }
     };
 
@@ -242,6 +335,7 @@ export function usePointerDragReorder<T extends DragItem>({
         window.clearTimeout(longPressTimer);
         longPressTimer = null;
       }
+      stopScrollLoop();
       cleanup();
 
       if (!dragInfo.current) return;
@@ -274,6 +368,7 @@ export function usePointerDragReorder<T extends DragItem>({
         window.clearTimeout(longPressTimer);
         longPressTimer = null;
       }
+      stopScrollLoop();
       cleanup();
 
       if (dragInfo.current) {
@@ -294,11 +389,13 @@ export function usePointerDragReorder<T extends DragItem>({
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerCancel);
+      window.removeEventListener('touchmove', handleTouchMove);
     };
 
-    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerCancel);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
   };
 
   const getItemStyle = (id: T['id'], index: number): React.CSSProperties => {
