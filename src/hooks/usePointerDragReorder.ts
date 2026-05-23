@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { triggerHaptic } from '../utils/haptic';
 
 export interface DragItem {
   id: number | string;
@@ -162,35 +163,20 @@ export function usePointerDragReorder<T extends DragItem>({
       info.draggedRow.style.position = 'relative';
       info.draggedRow.style.transition = 'none';
 
-      // Re-evaluate list item positions as they shift due to scrolling
-      const currentElements = Array.from(info.container.children) as HTMLElement[];
-      const activeRows = currentElements.filter((el) => el.hasAttribute('data-drag-id'));
-      const activeRects = activeRows.map((el) => {
-        const rect = el.getBoundingClientRect();
-        const rawId = el.getAttribute('data-drag-id')!;
-        const id: T['id'] = isNaN(Number(rawId)) ? rawId : Number(rawId);
-        return {
-          id,
-          centerY: rect.top + rect.height / 2,
-          height: rect.height,
-        };
-      });
-
-      info.rects = activeRects;
-
-      // Match overlap position to find target reorder item index
-      const currentCenterY = info.draggedRect.top - scrollTopDiff + constrainedDeltaY + info.draggedRect.height / 2;
+      // Match overlap position to find target reorder item index using stable untransformed initial rects
+      const currentCenterY = info.draggedRect.top + constrainedDeltaY + info.draggedRect.height / 2;
       let targetIndex = info.startIndex;
+      const rectsList = info.rects;
       
-      if (activeRects.length > 0) {
-        if (currentCenterY <= activeRects[0].centerY) {
+      if (rectsList.length > 0) {
+        if (currentCenterY <= rectsList[0].centerY) {
           targetIndex = 0;
-        } else if (currentCenterY >= activeRects[activeRects.length - 1].centerY) {
-          targetIndex = activeRects.length - 1;
+        } else if (currentCenterY >= rectsList[rectsList.length - 1].centerY) {
+          targetIndex = rectsList.length - 1;
         } else {
-          for (let i = 0; i < activeRects.length - 1; i++) {
-            const current = activeRects[i];
-            const next = activeRects[i + 1];
+          for (let i = 0; i < rectsList.length - 1; i++) {
+            const current = rectsList[i];
+            const next = rectsList[i + 1];
             if (currentCenterY >= current.centerY && currentCenterY <= next.centerY) {
               const distToCurrent = currentCenterY - current.centerY;
               const distToNext = next.centerY - currentCenterY;
@@ -201,12 +187,13 @@ export function usePointerDragReorder<T extends DragItem>({
         }
       }
 
-      const activeOverId = activeRects[targetIndex]?.id ?? null;
+      const activeOverId = rectsList[targetIndex]?.id ?? null;
       
       // Synchronously check and update overId within our drag ref, scheduling state update
       if (activeOverId !== info.overId) {
         info.overId = activeOverId;
         setOverId(activeOverId);
+        triggerHaptic(8); // Subtle 8ms tick when overtaking an item
       }
     };
 
@@ -234,13 +221,7 @@ export function usePointerDragReorder<T extends DragItem>({
     if (isTouch) {
       longPressTimer = window.setTimeout(() => {
         // Trigger burst vibration signal (subtle 10ms micro-tick)
-        if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
-          try {
-            window.navigator.vibrate(10);
-          } catch (vErr) {
-            console.warn("Vibration failed:", vErr);
-          }
-        }
+        triggerHaptic(10);
 
         isDraggingAllowed = true;
 
