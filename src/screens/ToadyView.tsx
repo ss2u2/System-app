@@ -69,7 +69,7 @@ export default function ToadyView({
   // Filter tasks that belong to Toady (not part of lists)
   const getToadyTasks = () => {
     return (state.tasks || []).filter(
-      (t) => (!t.cat.startsWith('list-item|') && t.cat !== 'list-def') || t.cat.startsWith('list-item|toady|')
+      (t) => !t.listId || t.listId === 'toady'
     );
   };
 
@@ -103,14 +103,11 @@ export default function ToadyView({
     e.stopPropagation();
     const updated = state.tasks.map(t => {
       if (t.id === taskId) {
-        if (t.cat.startsWith('list-item|')) {
-          const parts = t.cat.split('|');
-          const starred = parts[2] === 'true';
-          parts[2] = (!starred).toString();
-          return { ...t, cat: parts.join('|') };
-        } else {
-          return { ...t, cat: `list-item|toady|true|${t.id}|||none|` };
-        }
+        return { 
+          ...t, 
+          starred: !t.starred,
+          listId: t.listId || 'toady'
+        };
       }
       return t;
     });
@@ -154,8 +151,16 @@ export default function ToadyView({
     const newTask: Task = {
       id: newTaskId,
       name: taskData.name,
-      cat: `list-item|toady|false|${Date.now()}|${taskData.date}|${taskData.time}|${taskData.repeatType}|${taskData.repeatValue}`,
       done: false,
+      listId: 'toady',
+      starred: false,
+      createdAt: Date.now(),
+      date: taskData.date || undefined,
+      time: taskData.time || undefined,
+      repeatType: taskData.repeatType || 'none',
+      repeatValue: taskData.repeatValue || '',
+      cat: '',
+      subtasks: []
     };
     store.setState({ tasks: [...state.tasks, newTask] });
   };

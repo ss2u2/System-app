@@ -18,6 +18,16 @@ export interface Task {
   name: string;
   cat: string;
   done: boolean;
+  listId?: number | string | null;
+  starred?: boolean;
+  createdAt?: number;
+  date?: string;
+  time?: string;
+  repeatType?: string;
+  repeatValue?: string;
+  deadline?: string;
+  details?: string;
+  subtasks?: SubTask[];
 }
 
 export interface WeeklyGoal {
@@ -63,11 +73,13 @@ export interface DeletedIds {
   sessions: number[];
   goals: number[];
   journals: number[];
+  lists: number[];
 }
 
 export interface AppState {
   sessions: Session[];
   tasks: Task[];
+  lists: CustomList[];
   weekly: WeeklyGoal[];
   monthly: MonthlyGoal[];
   static: StaticGoal[];

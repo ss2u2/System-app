@@ -59,13 +59,94 @@ export function setupRealtimeSubscription(userId: string): void {
     );
   };
 
-  // 1. Subscribe to Tasks
-  handleTableChange('tasks', 'tasks', row => ({
+  // 0. Subscribe to Lists
+  handleTableChange('lists', 'lists', row => ({
     id: Number(row.id),
-    name: row.name,
-    cat: row.cat,
-    done: row.done
+    name: row.name
   }));
+
+  // 1. Subscribe to Tasks
+  handleTableChange('tasks', 'tasks', row => {
+    let repeatValStr = '';
+    if (row.repeat_value) {
+      try {
+        repeatValStr = typeof row.repeat_value === 'string' ? row.repeat_value : JSON.stringify(row.repeat_value);
+      } catch {}
+    }
+    return {
+      id: Number(row.id),
+      name: row.name,
+      done: row.done,
+      starred: row.starred || false,
+      listId: row.list_id ? Number(row.list_id) : null,
+      cat: row.cat || '',
+      date: row.task_date || undefined,
+      time: row.task_time || undefined,
+      repeatType: row.repeat_type || 'none',
+      repeatValue: repeatValStr,
+      deadline: row.deadline || undefined,
+      details: row.details || undefined
+    };
+  });
+
+  // 1b. Subscribe to Subtasks (updates nested subtasks array on matching task)
+  if (realtimeChannel) {
+    realtimeChannel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'subtasks' },
+      (payload: any) => {
+        const currentState = store.getState();
+        const mapSubtask = (row: any) => ({
+          id: Number(row.id),
+          name: row.name,
+          done: row.done
+        });
+
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new;
+          const taskId = Number(row.task_id);
+          const newSub = mapSubtask(row);
+
+          const updatedTasks = currentState.tasks.map(t => {
+            if (t.id === taskId) {
+              const subs = t.subtasks || [];
+              if (!subs.some(s => s.id === newSub.id)) {
+                return { ...t, subtasks: [...subs, newSub] };
+              }
+            }
+            return t;
+          });
+          store.setState({ tasks: updatedTasks }, true);
+        } else if (payload.eventType === 'UPDATE') {
+          const row = payload.new;
+          const taskId = Number(row.task_id);
+          const updatedSub = mapSubtask(row);
+
+          const updatedTasks = currentState.tasks.map(t => {
+            if (t.id === taskId) {
+              const subs = (t.subtasks || []).map(s => 
+                s.id === updatedSub.id ? { ...s, ...updatedSub } : s
+              );
+              return { ...t, subtasks: subs };
+            }
+            return t;
+          });
+          store.setState({ tasks: updatedTasks }, true);
+        } else if (payload.eventType === 'DELETE') {
+          const row = payload.old;
+          const deletedId = Number(row.id);
+
+          const updatedTasks = currentState.tasks.map(t => {
+            if (t.subtasks && t.subtasks.some(s => s.id === deletedId)) {
+              return { ...t, subtasks: t.subtasks.filter(s => s.id !== deletedId) };
+            }
+            return t;
+          });
+          store.setState({ tasks: updatedTasks }, true);
+        }
+      }
+    );
+  }
 
   // 2. Subscribe to Sessions
   handleTableChange('sessions', 'sessions', row => ({

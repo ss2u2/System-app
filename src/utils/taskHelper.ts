@@ -144,48 +144,19 @@ export interface ParsedTask {
 }
 
 export function parseTask(t: Task): ParsedTask {
-  if (t.cat && t.cat.startsWith('list-item|')) {
-    const parts = t.cat.split('|'); // list-item | listId | starred | createdAt | date | time | repeatType | repeatValue | deadline | details | subtasks
-    
-    let subtasks: SubTask[] = [];
-    if (parts[10]) {
-      try {
-        subtasks = JSON.parse(decodeURIComponent(parts[10]));
-      } catch (e) {
-        console.error('Failed to parse subtasks from t.cat:', e);
-      }
-    }
-    
-    return {
-      id: t.id,
-      listId: isNaN(Number(parts[1])) ? parts[1] : Number(parts[1]),
-      starred: parts[2] === 'true',
-      createdAt: Number(parts[3] || t.id),
-      date: parts[4] || undefined,
-      time: parts[5] || undefined,
-      repeatType: parts[6] || 'none',
-      repeatValue: parts[7] || '',
-      deadline: parts[8] || undefined,
-      details: parts[9] ? decodeURIComponent(parts[9]) : undefined,
-      subtasks,
-      name: t.name,
-      done: t.done
-    };
-  } else {
-    return {
-      id: t.id,
-      listId: 'toady', // legacy Toady view tasks
-      starred: false,
-      createdAt: t.id,
-      date: undefined,
-      time: undefined,
-      repeatType: 'none',
-      repeatValue: '',
-      deadline: undefined,
-      details: undefined,
-      subtasks: [],
-      name: t.name,
-      done: t.done
-    };
-  }
+  return {
+    id: t.id,
+    name: t.name,
+    done: t.done,
+    listId: t.listId || 'toady', // legacy Toady view tasks or daily items
+    starred: t.starred || false,
+    createdAt: t.createdAt || t.id,
+    date: t.date || undefined,
+    time: t.time || undefined,
+    repeatType: t.repeatType || 'none',
+    repeatValue: t.repeatValue || '',
+    deadline: t.deadline || undefined,
+    details: t.details || undefined,
+    subtasks: t.subtasks || []
+  };
 }

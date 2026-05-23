@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   IconStarFilled,
   IconPlus,
@@ -28,55 +28,11 @@ export default function TasksView({
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
 
-  // Seeding default lists and tasks if none exist
-  useEffect(() => {
-    const listDefs = (state.tasks || []).filter(t => t.cat === 'list-def');
-    if (listDefs.length === 0) {
-      const seedLists = [
-        { id: 1001, name: 'My Tasks', cat: 'list-def', done: false },
-        { id: 1002, name: 'roz', cat: 'list-def', done: false },
-        { id: 1003, name: 'rr', cat: 'list-def', done: false }
-      ];
-      
-      const now = Date.now();
-      const seedTasks = [
-        // My Tasks
-        { id: 2001, name: 'take throat medicine for samriti', cat: `list-item|1001|false|${now - 3 * 365 * 24 * 3600 * 1000}`, done: false },
-        { id: 2002, name: 'Harsh birthday', cat: `list-item|1001|false|${now - 4 * 365 * 24 * 3600 * 1000}`, done: false },
-        
-        // 6 Completed for My Tasks
-        { id: 2003, name: 'Setup IDE environment', cat: `list-item|1001|false|${now - 5 * 24 * 3600 * 1000}`, done: true },
-        { id: 2004, name: 'Configure supabase sync', cat: `list-item|1001|false|${now - 4 * 24 * 3600 * 1000}`, done: true },
-        { id: 2005, name: 'Integrate Notion editor', cat: `list-item|1001|false|${now - 3 * 24 * 3600 * 1000}`, done: true },
-        { id: 2006, name: 'Implement calendar goals', cat: `list-item|1001|false|${now - 2 * 24 * 3600 * 1000}`, done: true },
-        { id: 2007, name: 'Refactor DB caching', cat: `list-item|1001|false|${now - 1 * 24 * 3600 * 1000}`, done: true },
-        { id: 2008, name: 'Write documentation walkthrough', cat: `list-item|1001|false|${now - 12 * 3600 * 1000}`, done: true },
-        
-        // roz tasks (6 active)
-        { id: 3001, name: 'Review client feedback', cat: `list-item|1002|false|${now - 2 * 3600 * 1000}`, done: false },
-        { id: 3002, name: 'Update design mockup', cat: `list-item|1002|false|${now - 4 * 3600 * 1000}`, done: false },
-        { id: 3003, name: 'Plan product sprint', cat: `list-item|1002|false|${now - 1 * 24 * 3600 * 1000}`, done: false },
-        { id: 3004, name: 'Fix layout styling bugs', cat: `list-item|1002|false|${now - 2 * 24 * 3600 * 1000}`, done: false },
-        { id: 3005, name: 'Draft marketing copy', cat: `list-item|1002|false|${now - 3 * 24 * 3600 * 1000}`, done: false },
-        { id: 3006, name: 'Coordinate launch timeline', cat: `list-item|1002|false|${now - 5 * 24 * 3600 * 1000}`, done: false },
-
-        // rr tasks (1 active)
-        { id: 4001, name: 'Review pull requests', cat: `list-item|1003|false|${now - 600 * 1000}`, done: false }
-      ];
-
-      store.setState({ tasks: [...state.tasks, ...seedLists, ...seedTasks] });
-    }
-  }, [state.tasks]);
-
-  // Parse lists and custom tasks
-  const lists = (state.tasks || [])
-    .filter(t => t.cat === 'list-def')
-    .map(t => ({ id: t.id, name: t.name }));
-
-  const allLists = lists.length > 0 ? lists : [{ id: 1001, name: 'My Tasks' }];
+  // Relational lists and tasks
+  const allLists = state.lists && state.lists.length > 0 ? state.lists : [{ id: 1001, name: 'My Tasks' }];
 
   const customTasks = (state.tasks || [])
-    .filter(t => t.cat.startsWith('list-item|'))
+    .filter(t => t.listId !== undefined && t.listId !== null)
     .map(t => parseTask(t));
 
   // Calculate active task count per list
@@ -84,22 +40,16 @@ export default function TasksView({
     return customTasks.filter(t => t.listId === listId && !t.done).length;
   };
 
-
-
-
-
   // Handlers
   const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListName.trim()) return;
     const newListId = Date.now();
-    const newListDef: Task = {
+    const newList = {
       id: newListId,
-      name: newListName.trim(),
-      cat: 'list-def',
-      done: false
+      name: newListName.trim()
     };
-    store.setState({ tasks: [...state.tasks, newListDef] });
+    store.setState({ lists: [...(state.lists || []), newList] });
     setNewListName('');
     setIsNewListOpen(false);
     setActiveListId(newListId);
@@ -107,13 +57,16 @@ export default function TasksView({
 
   const handleDeleteList = (listId: number) => {
     if (window.confirm('Are you sure you want to delete this list and all its tasks?')) {
-      const updatedTasks = state.tasks.filter(t => {
-        if (t.id === listId && t.cat === 'list-def') return false;
-        if (t.cat.startsWith(`list-item|${listId}|`)) return false;
-        return true;
-      });
-      store.setState({ tasks: updatedTasks });
-      setActiveListId('1001'); // fallback to My Tasks
+      const updatedLists = (state.lists || []).filter(l => l.id !== listId);
+      const updatedTasks = (state.tasks || []).filter(t => t.listId !== listId);
+      
+      const deletedIds = {
+        ...(state.deletedIds || {}),
+        lists: [...(state.deletedIds?.lists || []), listId]
+      };
+      
+      store.setState({ lists: updatedLists, tasks: updatedTasks, deletedIds });
+      setActiveListId(1001); // fallback to My Tasks
     }
   };
 
@@ -124,7 +77,6 @@ export default function TasksView({
     repeatType: 'none' | 'daily' | 'custom';
     repeatValue: string;
   }) => {
-    // If currently on "Starred" section, add task to the default "My Tasks" list (1001) as starred
     const listId = activeListId === 'starred' ? 1001 : Number(activeListId);
     const isStarred = activeListId === 'starred';
 
@@ -132,8 +84,16 @@ export default function TasksView({
     const newTask: Task = {
       id: newTaskId,
       name: taskData.name,
-      cat: `list-item|${listId}|${isStarred}|${Date.now()}|${taskData.date}|${taskData.time}|${taskData.repeatType}|${taskData.repeatValue}`,
-      done: false
+      done: false,
+      listId,
+      starred: isStarred,
+      createdAt: Date.now(),
+      date: taskData.date || undefined,
+      time: taskData.time || undefined,
+      repeatType: taskData.repeatType || 'none',
+      repeatValue: taskData.repeatValue || '',
+      cat: '',
+      subtasks: []
     };
 
     store.setState({ tasks: [...state.tasks, newTask] });
@@ -142,11 +102,8 @@ export default function TasksView({
   const handleToggleStar = (taskId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = state.tasks.map(t => {
-      if (t.id === taskId && t.cat.startsWith('list-item|')) {
-        const parts = t.cat.split('|');
-        const starred = parts[2] === 'true';
-        parts[2] = (!starred).toString();
-        return { ...t, cat: parts.join('|') };
+      if (t.id === taskId) {
+        return { ...t, starred: !t.starred };
       }
       return t;
     });

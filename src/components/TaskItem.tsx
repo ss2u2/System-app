@@ -145,9 +145,7 @@ export default function TaskItem({
                       const freshState = store.getState();
                       const updatedTasks = freshState.tasks.map((t) => {
                         if (t.id === parsed.id) {
-                          const parts = t.cat.split('|');
-                          parts[10] = encodeURIComponent(JSON.stringify(updatedSubs));
-                          return { ...t, cat: parts.join('|') };
+                          return { ...t, subtasks: updatedSubs };
                         }
                         return t;
                       });

@@ -37,15 +37,67 @@ export function triggerSync(): void {
 
       const userId = user.id;
 
+      // 0. Sync lists
+      try {
+        const listPayloads = (state.lists || []).map(l => ({
+          id: l.id,
+          user_id: userId,
+          name: l.name
+        }));
+        if (listPayloads.length > 0) {
+          const { error } = await client.from('lists').upsert(listPayloads, { onConflict: 'id' });
+          if (error) console.error('Supabase upsert error [lists]:', error.message);
+        }
+      } catch (err) {
+        console.warn('Failed to sync lists to Supabase:', err);
+      }
+
+      // 0b. Delete lists
+      if (state.deletedIds?.lists && state.deletedIds.lists.length > 0) {
+        try {
+          const { error } = await client.from('lists').delete().in('id', state.deletedIds.lists);
+          if (error) {
+            console.error('Supabase delete error [lists]:', error.message);
+          } else if (storeRef) {
+            storeRef.setState({
+              deletedIds: {
+                ...storeRef.getState().deletedIds,
+                lists: []
+              }
+            }, true);
+          }
+        } catch (err) {
+          console.warn('Failed to delete lists from Supabase:', err);
+        }
+      }
+
       // 1. Sync tasks (always upsert regardless of array length)
       try {
-        const taskPayloads = (state.tasks || []).map(t => ({
-          id: t.id,
-          user_id: userId,
-          name: t.name,
-          cat: t.cat,
-          done: t.done
-        }));
+        const taskPayloads = (state.tasks || []).map(t => {
+          let parsedRepeatValue = null;
+          if (t.repeatValue) {
+            try {
+              parsedRepeatValue = JSON.parse(t.repeatValue);
+            } catch {
+              parsedRepeatValue = t.repeatValue;
+            }
+          }
+          return {
+            id: t.id,
+            user_id: userId,
+            list_id: t.listId || null,
+            name: t.name,
+            cat: t.cat || '',
+            done: t.done,
+            starred: t.starred || false,
+            task_date: t.date || null,
+            task_time: t.time || null,
+            repeat_type: t.repeatType || 'none',
+            repeat_value: parsedRepeatValue,
+            deadline: t.deadline || null,
+            details: t.details || null
+          };
+        });
         if (taskPayloads.length > 0) {
           const { error } = await client.from('tasks').upsert(taskPayloads, { onConflict: 'id' });
           if (error) console.error('Supabase upsert error [tasks]:', error.message, error.details);
@@ -54,7 +106,41 @@ export function triggerSync(): void {
         console.warn('Failed to sync tasks to Supabase:', err);
       }
 
-      // 1b. Delete tasks
+      // 1b. Sync subtasks relationally
+      try {
+        const subtaskPayloads = (state.tasks || []).flatMap(t => 
+          (t.subtasks || []).map(st => ({
+            id: st.id,
+            task_id: t.id,
+            name: st.name,
+            done: st.done
+          }))
+        );
+        if (subtaskPayloads.length > 0) {
+          const { error: upsertErr } = await client.from('subtasks').upsert(subtaskPayloads, { onConflict: 'id' });
+          if (upsertErr) console.error('Supabase upsert error [subtasks]:', upsertErr.message);
+
+          const activeSubtaskIds = subtaskPayloads.map(st => st.id);
+          const activeTaskIds = (state.tasks || []).map(t => t.id);
+          if (activeTaskIds.length > 0) {
+            const { error: deleteErr } = await client
+              .from('subtasks')
+              .delete()
+              .in('task_id', activeTaskIds)
+              .not('id', 'in', `(${activeSubtaskIds.join(',')})`);
+            if (deleteErr) console.error('Supabase subtask cleanup error:', deleteErr.message);
+          }
+        } else {
+          const activeTaskIds = (state.tasks || []).map(t => t.id);
+          if (activeTaskIds.length > 0) {
+            await client.from('subtasks').delete().in('task_id', activeTaskIds);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to sync subtasks to Supabase:', err);
+      }
+
+      // 1c. Delete tasks
       if (state.deletedIds?.tasks && state.deletedIds.tasks.length > 0) {
         try {
           const { error } = await client.from('tasks').delete().in('id', state.deletedIds.tasks);
@@ -234,6 +320,25 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
       }
     };
 
+    // Fetch tasks with nested relation to subtasks
+    const fetchTasksWithSubtasks = async (): Promise<any[] | null> => {
+      try {
+        const { data, error } = await client
+          .from('tasks')
+          .select('*, subtasks(*)')
+          .eq('user_id', userId);
+        
+        if (error) {
+          console.warn('Supabase warning pulling tasks and subtasks:', error.message);
+          return null;
+        }
+        return data;
+      } catch (err: any) {
+        console.warn('Supabase exception pulling tasks and subtasks:', err.message);
+        return null;
+      }
+    };
+
     // Fetch profile data helper
     const fetchProfile = async (): Promise<any | null> => {
       try {
@@ -245,15 +350,17 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
       }
     };
 
-    // Fetch from all tables in parallel with catch-all resiliency
+    // Fetch from all tables in parallel
     const [
+      listsData,
       tasksData,
       sessionsData,
       goalsData,
       journalsData,
       profileData
     ] = await Promise.all([
-      fetchTable('tasks'),
+      fetchTable('lists'),
+      fetchTasksWithSubtasks(),
       fetchTable('sessions'),
       fetchTable('goals'),
       fetchTable('journals'),
@@ -262,8 +369,37 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
 
     const newState: Partial<import('../types').AppState> = {};
 
+    if (listsData) {
+      newState.lists = listsData.map((l: any) => ({ id: Number(l.id), name: l.name }));
+    }
     if (tasksData) {
-      newState.tasks = tasksData.map((t: any) => ({ id: Number(t.id), name: t.name, cat: t.cat, done: t.done }));
+      newState.tasks = tasksData.map((t: any) => {
+        let repeatValStr = '';
+        if (t.repeat_value) {
+          try {
+            repeatValStr = typeof t.repeat_value === 'string' ? t.repeat_value : JSON.stringify(t.repeat_value);
+          } catch {}
+        }
+        return {
+          id: Number(t.id),
+          name: t.name,
+          done: t.done,
+          starred: t.starred,
+          listId: t.list_id ? Number(t.list_id) : null,
+          cat: t.cat || '',
+          date: t.task_date || undefined,
+          time: t.task_time || undefined,
+          repeatType: t.repeat_type || 'none',
+          repeatValue: repeatValStr,
+          deadline: t.deadline || undefined,
+          details: t.details || undefined,
+          subtasks: (t.subtasks || []).map((st: any) => ({
+            id: Number(st.id),
+            name: st.name,
+            done: st.done
+          }))
+        };
+      });
     }
     if (sessionsData) {
       newState.sessions = sessionsData.map((s: any) => ({ id: Number(s.id), name: s.name, icon: s.icon, color: s.color, steps: s.steps, open: false }));

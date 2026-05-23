@@ -21,7 +21,28 @@ const defaultState: AppState = {
   tasks: [
     {id: 1, name: 'Read 20 pages', cat: 'mind', done: false},
     {id: 2, name: 'Reply to emails', cat: 'work', done: false},
-    {id: 3, name: 'Meditate', cat: 'mind', done: false}
+    {id: 3, name: 'Meditate', cat: 'mind', done: false},
+    // Seed Tasks linked to default lists
+    {id: 2001, name: 'take throat medicine for samriti', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 3 * 365 * 24 * 3600 * 1000, done: false},
+    {id: 2002, name: 'Harsh birthday', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 4 * 365 * 24 * 3600 * 1000, done: false},
+    {id: 2003, name: 'Setup IDE environment', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 5 * 24 * 3600 * 1000, done: true},
+    {id: 2004, name: 'Configure supabase sync', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 4 * 24 * 3600 * 1000, done: true},
+    {id: 2005, name: 'Integrate Notion editor', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 3 * 24 * 3600 * 1000, done: true},
+    {id: 2006, name: 'Implement calendar goals', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 2 * 24 * 3600 * 1000, done: true},
+    {id: 2007, name: 'Refactor DB caching', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 1 * 24 * 3600 * 1000, done: true},
+    {id: 2008, name: 'Write documentation walkthrough', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 12 * 3600 * 1000, done: true},
+    {id: 3001, name: 'Review client feedback', cat: '', listId: 1002, starred: false, createdAt: Date.now() - 2 * 3600 * 1000, done: false},
+    {id: 3002, name: 'Update design mockup', cat: '', listId: 1002, starred: false, createdAt: Date.now() - 4 * 3600 * 1000, done: false},
+    {id: 3003, name: 'Plan product sprint', cat: '', listId: 1002, starred: false, createdAt: Date.now() - 1 * 24 * 3600 * 1000, done: false},
+    {id: 3004, name: 'Fix layout styling bugs', cat: '', listId: 1002, starred: false, createdAt: Date.now() - 2 * 24 * 3600 * 1000, done: false},
+    {id: 3005, name: 'Draft marketing copy', cat: '', listId: 1002, starred: false, createdAt: Date.now() - 3 * 24 * 3600 * 1000, done: false},
+    {id: 3006, name: 'Coordinate launch timeline', cat: '', listId: 1002, starred: false, createdAt: Date.now() - 5 * 24 * 3600 * 1000, done: false},
+    {id: 4001, name: 'Review pull requests', cat: '', listId: 1003, starred: false, createdAt: Date.now() - 600 * 1000, done: false}
+  ],
+  lists: [
+    {id: 1001, name: 'My Tasks'},
+    {id: 1002, name: 'roz'},
+    {id: 1003, name: 'rr'}
   ],
   weekly: [
     {id: 1, name: 'Exercise 5x this week', target: 5, current: 2},
@@ -64,7 +85,8 @@ const defaultState: AppState = {
     tasks: [],
     sessions: [],
     goals: [],
-    journals: []
+    journals: [],
+    lists: []
   }
 };
 
@@ -81,6 +103,18 @@ function loadInitialState(): AppState {
     if (!raw) return defaultState;
     
     let parsed: AppState = JSON.parse(raw);
+    
+    // Fallback for schema updates
+    parsed.lists = parsed.lists || [
+      {id: 1001, name: 'My Tasks'},
+      {id: 1002, name: 'roz'},
+      {id: 1003, name: 'rr'}
+    ];
+    if (!parsed.deletedIds) {
+      parsed.deletedIds = { tasks: [], sessions: [], goals: [], journals: [], lists: [] };
+    } else {
+      parsed.deletedIds.lists = parsed.deletedIds.lists || [];
+    }
     
     // Check if new day has arrived
     const todayStr = new Date().toDateString();

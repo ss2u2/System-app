@@ -87,59 +87,51 @@ function AuthenticatedApp() {
       if (t.id === taskId) {
         const isCompleting = !t.done;
         
-        if (isCompleting && t.cat.startsWith('list-item|')) {
-          const parts = t.cat.split('|');
-          const repeatTypeVal = parts[6] || 'none';
-          const repeatValueVal = parts[7] || '';
+        if (isCompleting && t.repeatType && t.repeatType !== 'none') {
+          const currentDateStr = t.date || getLocalDateString();
+          const nextDateStr = getNextOccurrenceDate(currentDateStr, t.repeatType, t.repeatValue || '');
           
-          if (repeatTypeVal !== 'none') {
-            const currentDateStr = parts[4] || getLocalDateString();
-            const nextDateStr = getNextOccurrenceDate(currentDateStr, repeatTypeVal, repeatValueVal);
+          if (nextDateStr) {
+            const newTaskId = Date.now() + 1;
+            let nextRepeatValue = t.repeatValue || '';
             
-            if (nextDateStr) {
-              const newTaskId = Date.now() + 1;
-              let nextRepeatValue = repeatValueVal;
-              
-              if (repeatTypeVal === 'custom') {
-                try {
-                  const config = JSON.parse(repeatValueVal);
-                  if (config.ends === 'after') {
-                    config.endsAfter = Number(config.endsAfter) - 1;
-                    nextRepeatValue = JSON.stringify(config);
-                  }
-                } catch (e) {
-                  console.error(e);
+            if (t.repeatType === 'custom' && t.repeatValue) {
+              try {
+                const config = JSON.parse(t.repeatValue);
+                if (config.ends === 'after') {
+                  config.endsAfter = Number(config.endsAfter) - 1;
+                  nextRepeatValue = JSON.stringify(config);
                 }
+              } catch (e) {
+                console.error(e);
               }
-              
-              const deadline = parts[8] || '';
-              const details = parts[9] || '';
-              let nextSubtasksStr = parts[10] || '';
-              if (nextSubtasksStr) {
-                try {
-                  const subtasks = JSON.parse(decodeURIComponent(nextSubtasksStr));
-                  const resetSubtasks = subtasks.map((st: any) => ({ ...st, done: false }));
-                  nextSubtasksStr = encodeURIComponent(JSON.stringify(resetSubtasks));
-                } catch {}
-              }
-
-              const nextCat = `list-item|${parts[1]}|${parts[2]}|${newTaskId}|${nextDateStr}|${parts[5] || ''}|${repeatTypeVal}|${nextRepeatValue}|${deadline}|${details}|${nextSubtasksStr}`;
-              
-              newTaskToSpawn = {
-                id: newTaskId,
-                name: t.name,
-                cat: nextCat,
-                done: false
-              };
             }
             
-            parts[6] = 'none';
-            return {
-              ...t,
-              cat: parts.join('|'),
-              done: true
+            const resetSubtasks = (t.subtasks || []).map((st: any) => ({ ...st, done: false }));
+            
+            newTaskToSpawn = {
+              id: newTaskId,
+              name: t.name,
+              done: false,
+              listId: t.listId,
+              starred: t.starred || false,
+              createdAt: newTaskId,
+              date: nextDateStr,
+              time: t.time,
+              repeatType: t.repeatType,
+              repeatValue: nextRepeatValue,
+              deadline: t.deadline,
+              details: t.details,
+              subtasks: resetSubtasks,
+              cat: ''
             };
           }
+          
+          return {
+            ...t,
+            repeatType: 'none',
+            done: true
+          };
         }
         
         return { ...t, done: !t.done };
@@ -156,14 +148,15 @@ function AuthenticatedApp() {
 
   const handleGlobalDeleteTask = (taskId: number) => {
     const updated = state.tasks.filter(t => t.id !== taskId);
-    store.setState({ tasks: updated });
+    const deletedIds = {
+      ...(state.deletedIds || {}),
+      tasks: [...(state.deletedIds?.tasks || []), taskId]
+    };
+    store.setState({ tasks: updated, deletedIds });
   };
 
   // Get active lists for TaskDetailView list selector
-  const lists = (state.tasks || [])
-    .filter(t => t.cat === 'list-def')
-    .map(t => ({ id: t.id, name: t.name }));
-  const allLists = lists.length > 0 ? lists : [{ id: 1001, name: 'My Tasks' }];
+  const allLists = state.lists && state.lists.length > 0 ? state.lists : [{ id: 1001, name: 'My Tasks' }];
 
   return (
     <AppContainer>

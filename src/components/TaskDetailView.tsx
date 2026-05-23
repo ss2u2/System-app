@@ -137,7 +137,16 @@ export default function TaskDetailView({
           ...t,
           name: currentName.trim() || 'Untitled Task',
           done: currentDone,
-          cat: `list-item|${currentListId}|${currentStarred}|${parsed.createdAt}|${currentDate}|${currentTime}|${currentRepeatType}|${currentRepeatValue}|${currentDeadline}|${encodeURIComponent(currentDetails)}|${encodeURIComponent(JSON.stringify(currentSubtasks))}`,
+          listId: currentListId,
+          starred: currentStarred,
+          date: currentDate || undefined,
+          time: currentTime || undefined,
+          repeatType: currentRepeatType,
+          repeatValue: currentRepeatValue,
+          deadline: currentDeadline || undefined,
+          details: currentDetails || undefined,
+          subtasks: currentSubtasks,
+          cat: ''
         };
       }
       return t;

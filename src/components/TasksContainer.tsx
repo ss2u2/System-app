@@ -87,7 +87,7 @@ export default function TasksContainer({
 
   // Parse all tasks to CustomTask format
   const customTasks = (state.tasks || [])
-    .filter(t => t.cat.startsWith('list-item|'))
+    .filter(t => t.listId !== undefined && t.listId !== null)
     .map(t => parseTask(t));
 
   // Filter tasks based on active list selection
@@ -274,10 +274,8 @@ export default function TasksContainer({
 
   const convertToTask = (t: typeof customTasks[0]): Task => {
     return {
-      id: t.id,
-      name: t.name,
-      done: t.done,
-      cat: `list-item|${t.listId}|${t.starred}|${t.createdAt}|${t.date || ''}|${t.time || ''}|${t.repeatType || 'none'}|${t.repeatValue || ''}|${t.deadline || ''}|${t.details ? encodeURIComponent(t.details) : ''}|${t.subtasks ? encodeURIComponent(JSON.stringify(t.subtasks)) : ''}`
+      ...t,
+      cat: ''
     };
   };
 
