@@ -74,17 +74,14 @@ export function usePointerDragReorder<T extends DragItem>({
       return;
     }
 
-    e.preventDefault();
+    const isTouch = e.pointerType === 'touch';
+    if (!isTouch) {
+      e.preventDefault();
+    }
 
     const draggedRow = e.currentTarget;
     const container = draggedRow.parentElement;
     if (!container) return;
-
-    try {
-      draggedRow.setPointerCapture(e.pointerId);
-    } catch (err) {
-      console.warn("Could not set pointer capture:", err);
-    }
 
     // Fetch list rows and filter to our reorderable items
     const rowElements = Array.from(container.children) as HTMLElement[];
@@ -119,16 +116,71 @@ export function usePointerDragReorder<T extends DragItem>({
       overId: itemId,
     };
 
+    let isDraggingAllowed = !isTouch;
+    let longPressTimer: number | null = null;
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    if (isTouch) {
+      longPressTimer = window.setTimeout(() => {
+        // Trigger burst vibration signal
+        if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+          try {
+            window.navigator.vibrate(80);
+          } catch (vErr) {
+            console.warn("Vibration failed:", vErr);
+          }
+        }
+
+        isDraggingAllowed = true;
+
+        if (dragInfo.current) {
+          dragInfo.current.isDraggingStarted = true;
+          setDraggedId(itemId);
+
+          // Capture pointer once long press is active
+          try {
+            draggedRow.setPointerCapture(e.pointerId);
+          } catch (err) {
+            console.warn("Could not set pointer capture on long press:", err);
+          }
+        }
+      }, 500); // 500ms tap and hold delay
+    } else {
+      // Capture pointer immediately for mouse/pen
+      try {
+        draggedRow.setPointerCapture(e.pointerId);
+      } catch (err) {
+        console.warn("Could not set pointer capture:", err);
+      }
+    }
+
     const handlePointerMove = (moveEvent: PointerEvent) => {
-      console.log("PointerMove active. Dragging started:", dragInfo.current?.isDraggingStarted, "deltaY:", moveEvent.clientY - (dragInfo.current?.startY || 0));
       if (!dragInfo.current) return;
       const info = dragInfo.current;
+
+      // Handle touch scroll detection / canceling long press
+      if (isTouch && !isDraggingAllowed) {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+        // If the user moves their finger more than 10px before the long press completes,
+        // it means they are scrolling or swiping. Cancel the long press timer.
+        if (distance > 10) {
+          if (longPressTimer !== null) {
+            window.clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        }
+        return; // Don't proceed to drag logic
+      }
+
       const deltaY = moveEvent.clientY - info.startY;
 
-      // Start drag only after passing a small movement threshold to allow tap/clicks
+      // Start drag only after passing a small movement threshold to allow tap/clicks (for mouse)
       if (!info.isDraggingStarted) {
         if (Math.abs(deltaY) > 4) {
-          console.log("Threshold passed. Starting drag for item:", info.itemId);
           info.isDraggingStarted = true;
           setDraggedId(info.itemId);
         } else {
@@ -186,7 +238,10 @@ export function usePointerDragReorder<T extends DragItem>({
     };
 
     const handlePointerUp = () => {
-      console.log("PointerUp fired.");
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
       cleanup();
 
       if (!dragInfo.current) return;
@@ -215,7 +270,10 @@ export function usePointerDragReorder<T extends DragItem>({
     };
 
     const handlePointerCancel = () => {
-      console.log("PointerCancel fired.");
+      if (longPressTimer !== null) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
       cleanup();
 
       if (dragInfo.current) {
@@ -248,7 +306,7 @@ export function usePointerDragReorder<T extends DragItem>({
 
     const baseStyle: React.CSSProperties = {
       cursor: draggedId === id ? 'grabbing' : 'grab',
-      touchAction: 'none',
+      touchAction: draggedId !== null ? 'none' : 'pan-y', // Let touch devices scroll unless dragging is active
       willChange: draggedId !== null ? 'transform' : undefined,
     };
 
