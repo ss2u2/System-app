@@ -85,7 +85,7 @@ export function triggerSync(): void {
           return {
             id: t.id,
             user_id: userId,
-            list_id: t.listId || null,
+            list_id: (t.listId === 'toady' || !t.listId) ? null : Number(t.listId),
             name: t.name,
             cat: t.cat || '',
             done: t.done,
