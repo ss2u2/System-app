@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../services/supabase';
-import { pullSyncData } from '../services/sync';
+import { pullSyncData, triggerSync } from '../services/sync';
 import { store } from '../services/db';
 import { setupRealtimeSubscription, cleanupRealtimeSubscription } from '../services/realtime';
 
@@ -16,6 +16,13 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 interface AuthProviderProps {
   children: ReactNode;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage = 'Operation timed out'): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(errorMessage)), timeoutMs))
+  ]);
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
@@ -107,10 +114,53 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
+  // Handle tab visibility changes to reconnect realtime subscription and trigger sync catch-up
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        // Quick check if user is logged in
+        const { data: { session } } = await client.auth.getSession();
+        if (!session?.user) return;
+
+        console.log("Tab focused! Re-syncing with Supabase...");
+
+        // 1. Force the Realtime socket to reconnect if dropped
+        if (client.realtime && !client.realtime.isConnected()) {
+          console.log("Realtime socket disconnected. Reconnecting...");
+          client.realtime.connect();
+        }
+
+        // 2. Trigger an immediate cloud pull with an 8-second timeout to refresh stale data
+        setLoadingData(true);
+        try {
+          const cloudState = await withTimeout(pullSyncData(), 8000, 'Cloud pull timed out');
+          if (cloudState) {
+            store.setState(cloudState, true); // Update local state, skip automatic push
+          }
+        } catch (err: any) {
+          console.warn("Failed to catch up from cloud on tab focus:", err.message);
+        } finally {
+          setLoadingData(false);
+        }
+
+        // 3. Force background sync engine to push any pending local edits
+        triggerSync();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
   async function loadUserData() {
     setLoadingData(true);
     try {
-      const cloudState = await pullSyncData();
+      const cloudState = await withTimeout(pullSyncData(), 8000, 'Cloud pull timed out');
       if (cloudState) {
         store.setState(cloudState, true);
       }
