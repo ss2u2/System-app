@@ -313,7 +313,7 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
             width: '100%',
             height: '100%',
             overflowY: 'auto',
-            padding: '20px 20px 20px 60px',
+            padding: '20px',
             maxWidth: '100%'
           }}
         >
