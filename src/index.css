@@ -327,6 +327,12 @@ body {
   outline: none;
   margin-bottom: 20px;
   width: 100%;
+  resize: none;
+  overflow-y: hidden;
+  height: auto;
+  line-height: 1.25;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .journal-title::placeholder {
@@ -338,7 +344,7 @@ body {
   display: flex;
   flex-direction: column;
   padding-bottom: 100px;
-  padding-left: 40px;
+  padding-left: 72px;
 }
 
 .j-block {
@@ -351,9 +357,10 @@ body {
 
 .j-floating-controls {
   position: absolute;
-  left: -40px;
+  left: -68px;
   display: flex;
   align-items: center;
+  gap: 6px;
   height: 1.65em;
   top: 2px;
   opacity: 0;
@@ -371,12 +378,15 @@ body {
 }
 
 .j-ctrl-btn {
-  padding: 4px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   color: var(--text3);
-  border-radius: 4px;
-  font-size: 16px;
-  display: flex;
+  border-radius: 6px;
+  transition: background-color 0.15s, color 0.15s;
 }
 
 .j-ctrl-btn:hover {
@@ -387,6 +397,29 @@ body {
 .j-drag-handle {
   cursor: grab;
   touch-action: none;
+}
+
+@media (pointer: coarse) {
+  .j-floating-controls {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    left: -68px !important;
+  }
+  
+  .j-ctrl-btn {
+    width: 30px;
+    height: 30px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+    border-radius: 50% !important;
+    color: var(--text2);
+  }
+  
+  .j-ctrl-btn:active {
+    background: var(--bg3);
+    color: var(--text);
+  }
 }
 
 .j-block.dragging-active {

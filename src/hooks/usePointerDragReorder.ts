@@ -67,6 +67,25 @@ export function usePointerDragReorder<T extends DragItem>({
     };
   }, [items, onReorder, onEdit, enabled, draggedId, overId]);
 
+  // Manage window cursor and user selection styles during active drag
+  useEffect(() => {
+    if (draggedId !== null) {
+      const originalCursor = document.body.style.cursor;
+      const originalUserSelect = document.body.style.userSelect;
+      const originalWebkitUserSelect = document.body.style.webkitUserSelect;
+
+      document.body.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
+      document.body.style.webkitUserSelect = 'none';
+
+      return () => {
+        document.body.style.cursor = originalCursor;
+        document.body.style.userSelect = originalUserSelect;
+        document.body.style.webkitUserSelect = originalWebkitUserSelect;
+      };
+    }
+  }, [draggedId]);
+
   // Remeasure layout rects and heights once dragging starts and the dragged item has collapsed its subtasks
   useEffect(() => {
     if (draggedId !== null && dragInfo.current) {
@@ -116,6 +135,14 @@ export function usePointerDragReorder<T extends DragItem>({
 
     const isTouch = e.pointerType === 'touch';
     const target = e.target as HTMLElement;
+    const draggedRow = e.currentTarget;
+
+    // Enforce that dragging only starts from the drag handle if a drag handle exists in the row
+    const hasDragHandle = !!draggedRow.querySelector('.j-drag-handle');
+    const isDragHandle = !!target.closest('.j-drag-handle');
+    if (hasDragHandle && !isDragHandle) {
+      return;
+    }
 
     const isNoDrag = target.closest('[data-nodrag]');
     const isIgnored =
@@ -131,11 +158,12 @@ export function usePointerDragReorder<T extends DragItem>({
       return;
     }
 
-    if (!isTouch) {
+    const useLongPress = isTouch && !isDragHandle;
+
+    if (!useLongPress) {
       e.preventDefault();
     }
 
-    const draggedRow = e.currentTarget;
     const container = draggedRow.parentElement;
     if (!container) return;
 
@@ -173,7 +201,7 @@ export function usePointerDragReorder<T extends DragItem>({
       overId: itemId,
     };
 
-    let isDraggingAllowed = !isTouch;
+    let isDraggingAllowed = !useLongPress;
     let longPressTimer: number | null = null;
     const startX = e.clientX;
     const startY = e.clientY;
@@ -261,7 +289,7 @@ export function usePointerDragReorder<T extends DragItem>({
       }
     };
 
-    if (isTouch) {
+    if (useLongPress) {
       longPressTimer = window.setTimeout(() => {
         if (rects.length <= 1) return; // Do not start drag for single items
 
@@ -283,7 +311,7 @@ export function usePointerDragReorder<T extends DragItem>({
         }
       }, 500); // 500ms tap and hold delay
     } else {
-      // Capture pointer immediately for mouse/pen
+      // Capture pointer immediately for mouse/pen/immediate touch
       try {
         draggedRow.setPointerCapture(e.pointerId);
       } catch (err) {

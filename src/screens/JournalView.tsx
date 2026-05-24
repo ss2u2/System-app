@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   IconX,
   IconBook,
@@ -29,7 +29,16 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
   const [newImageUrl, setNewImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
 
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
   const activeEntry = state.journals.find((j) => j.id === activeEntryId);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [activeEntry?.title, isEditing]);
 
   // General updater helper for active journal entry
   const updateActiveEntry = (fields: Partial<JournalEntry>) => {
@@ -586,17 +595,35 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
 
           {/* Large Title */}
           {isEditing ? (
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
               className="journal-title"
               placeholder="Untitled Journal Entry"
-              value={activeEntry.title}
+              value={activeEntry?.title || ''}
               onChange={(e) => updateActiveEntry({ title: e.target.value })}
-              style={{ width: '100%' }}
+              rows={1}
+              style={{
+                width: '100%',
+                resize: 'none',
+                height: 'auto',
+                overflowY: 'hidden'
+              }}
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = 'auto';
+                el.style.height = `${el.scrollHeight}px`;
+              }}
             />
           ) : (
-            <h1 className="journal-title" style={{ width: '100%' }}>
-              {activeEntry.title || 'Untitled Journal Entry'}
+            <h1 
+              className="journal-title" 
+              style={{ 
+                width: '100%', 
+                wordBreak: 'break-word', 
+                whiteSpace: 'pre-wrap' 
+              }}
+            >
+              {activeEntry?.title || 'Untitled Journal Entry'}
             </h1>
           )}
 
