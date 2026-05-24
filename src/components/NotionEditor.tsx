@@ -441,12 +441,12 @@ export default function NotionEditor({ initialContent, onChange, readOnly }: Not
             {!readOnly && (
               <div className="j-floating-controls">
                 <div className="j-ctrl-btn cursor-pointer" data-nodrag onClick={() => addNewBlockFloat(idx)}>
-                  <IconPlus size={16} />
+                  <IconPlus size={18} />
                 </div>
                 <div
                   className="j-ctrl-btn j-drag-handle cursor-grab"
                 >
-                  <IconGripVertical size={16} />
+                  <IconGripVertical size={18} />
                 </div>
               </div>
             )}

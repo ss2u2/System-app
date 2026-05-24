@@ -344,7 +344,7 @@ body {
   display: flex;
   flex-direction: column;
   padding-bottom: 100px;
-  padding-left: 72px;
+  padding-left: 60px;
 }
 
 .j-block {
@@ -357,10 +357,10 @@ body {
 
 .j-floating-controls {
   position: absolute;
-  left: -68px;
+  left: -56px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   height: 1.65em;
   top: 2px;
   opacity: 0;
@@ -368,7 +368,6 @@ body {
   transition: opacity 0.15s;
   z-index: 10;
   user-select: none;
-  padding-right: 15px;
 }
 
 .j-block:hover .j-floating-controls,
@@ -378,8 +377,8 @@ body {
 }
 
 .j-ctrl-btn {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -397,13 +396,14 @@ body {
 .j-drag-handle {
   cursor: grab;
   touch-action: none;
+  width: 20px;
 }
 
 @media (pointer: coarse) {
   .j-floating-controls {
     opacity: 1 !important;
     pointer-events: auto !important;
-    left: -68px !important;
+    left: -64px !important;
   }
   
   .j-ctrl-btn {

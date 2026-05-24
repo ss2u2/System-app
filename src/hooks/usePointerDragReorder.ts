@@ -317,6 +317,15 @@ export function usePointerDragReorder<T extends DragItem>({
       } catch (err) {
         console.warn("Could not set pointer capture:", err);
       }
+
+      if (isDragHandle && rects.length > 1) {
+        if (dragInfo.current) {
+          dragInfo.current.isDraggingStarted = true;
+          setDraggedId(itemId);
+          draggedRow.style.touchAction = 'none';
+          triggerHaptic(10);
+        }
+      }
     }
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
@@ -403,6 +412,7 @@ export function usePointerDragReorder<T extends DragItem>({
       info.draggedRow.style.zIndex = '';
       info.draggedRow.style.position = '';
       info.draggedRow.style.transition = '';
+      info.draggedRow.style.touchAction = '';
 
       if (info.isDraggingStarted) {
         const targetId = info.overId;
@@ -434,6 +444,7 @@ export function usePointerDragReorder<T extends DragItem>({
         info.draggedRow.style.zIndex = '';
         info.draggedRow.style.position = '';
         info.draggedRow.style.transition = '';
+        info.draggedRow.style.touchAction = '';
       }
 
       setDraggedId(null);
