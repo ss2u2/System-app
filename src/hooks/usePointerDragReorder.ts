@@ -67,6 +67,49 @@ export function usePointerDragReorder<T extends DragItem>({
     };
   }, [items, onReorder, onEdit, enabled, draggedId, overId]);
 
+  // Remeasure layout rects and heights once dragging starts and the dragged item has collapsed its subtasks
+  useEffect(() => {
+    if (draggedId !== null && dragInfo.current) {
+      const info = dragInfo.current;
+      const containerRect = info.container.getBoundingClientRect();
+      const draggedRect = info.draggedRow.getBoundingClientRect();
+      
+      // Subtract dragOffsetRef.current to find the initial untransformed top coordinate
+      const untransformedTop = draggedRect.top - dragOffsetRef.current;
+      const adjustedDraggedRect = new DOMRect(
+        draggedRect.left,
+        untransformedTop,
+        draggedRect.width,
+        draggedRect.height
+      );
+
+      const rowElements = Array.from(info.container.children) as HTMLElement[];
+      const itemRows = rowElements.filter((el) => el.hasAttribute('data-drag-id'));
+
+      const rects = itemRows.map((el) => {
+        const rect = el.getBoundingClientRect();
+        const rawId = el.getAttribute('data-drag-id')!;
+        const id: T['id'] = isNaN(Number(rawId)) ? rawId : Number(rawId);
+        
+        let centerY = rect.top + rect.height / 2;
+        // If it is the dragged item itself, subtract the translation offset to get the untransformed centerY
+        if (id === draggedId) {
+          centerY -= dragOffsetRef.current;
+        }
+
+        return {
+          id,
+          centerY,
+          height: rect.height,
+        };
+      });
+
+      info.containerRect = containerRect;
+      info.draggedRect = adjustedDraggedRect;
+      info.rects = rects;
+    }
+  }, [draggedId]);
+
   const handlePointerDown = (e: React.PointerEvent<HTMLElement>, itemId: T['id'], index: number) => {
     if (!callbacksRef.current.enabled) return;
     if (e.button !== 0) return; // Left click only
@@ -114,8 +157,6 @@ export function usePointerDragReorder<T extends DragItem>({
         height: rect.height,
       };
     });
-
-    if (rects.length <= 1) return;
 
     dragInfo.current = {
       itemId,
@@ -220,6 +261,8 @@ export function usePointerDragReorder<T extends DragItem>({
 
     if (isTouch) {
       longPressTimer = window.setTimeout(() => {
+        if (rects.length <= 1) return; // Do not start drag for single items
+
         // Trigger burst vibration signal (subtle 10ms micro-tick)
         triggerHaptic(10);
 
@@ -273,6 +316,9 @@ export function usePointerDragReorder<T extends DragItem>({
       // Start drag only after passing a small movement threshold to allow tap/clicks (for mouse)
       if (!info.isDraggingStarted) {
         if (Math.abs(deltaY) > 4) {
+          if (info.rects.length <= 1) {
+            return;
+          }
           info.isDraggingStarted = true;
           setDraggedId(info.itemId);
         } else {
