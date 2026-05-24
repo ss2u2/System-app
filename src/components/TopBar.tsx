@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { IconLogout, IconUser, IconSun, IconMoon } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../App';
+import { useTheme } from '../context/ThemeContext';
 
 interface TopBarProps {
   onOpenSyncModal: () => void;

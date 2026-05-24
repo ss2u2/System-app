@@ -17,6 +17,20 @@ export function registerStore(store: AppStore): void {
  * Debounced to prevent continuous network requests on quick user actions.
  * Reads the LATEST state from storeRef at fire time to avoid stale closures.
  */
+import type { AppState } from '../types';
+let lastSyncedState: AppState | null = null;
+
+/**
+ * Manually baseline the last synced state when pulling remote changes.
+ */
+export function setLastSyncedState(state: AppState): void {
+  lastSyncedState = JSON.parse(JSON.stringify(state));
+}
+
+/**
+ * Pushes the local state changes to Supabase database.
+ * Uses a diffing engine to sync ONLY modified rows (deltas) to minimize database load.
+ */
 export function triggerSync(): void {
   const client = supabase;
   if (!client) return;
@@ -24,9 +38,25 @@ export function triggerSync(): void {
   if (syncTimeout) clearTimeout(syncTimeout);
 
   syncTimeout = setTimeout(async () => {
-    // Always read the FRESHEST state at fire time, not a stale snapshot
     if (!storeRef) return;
     const state = storeRef.getState();
+
+    // Initialize baseline snapshot if missing (force initial upload of seed data)
+    if (!lastSyncedState) {
+      lastSyncedState = {
+        sessions: [],
+        tasks: [],
+        lists: [],
+        weekly: [],
+        monthly: [],
+        static: [],
+        journals: [],
+        completionHistory: {},
+        streak: 0,
+        lastActiveDate: '',
+        deletedIds: { tasks: [], sessions: [], goals: [], journals: [], lists: [] }
+      };
+    }
 
     try {
       const { data: { user }, error: authErr } = await client.auth.getUser();
@@ -37,43 +67,117 @@ export function triggerSync(): void {
 
       const userId = user.id;
 
-      // 0. Sync lists
-      try {
-        const listPayloads = (state.lists || []).map(l => ({
-          id: l.id,
-          user_id: userId,
-          name: l.name
-        }));
-        if (listPayloads.length > 0) {
-          const { error } = await client.from('lists').upsert(listPayloads, { onConflict: 'id' });
-          if (error) console.error('Supabase upsert error [lists]:', error.message);
-        }
-      } catch (err) {
-        console.warn('Failed to sync lists to Supabase:', err);
+      // ─── DIFFING ENGINE ───
+
+      // 1. Lists
+      const prevLists = lastSyncedState.lists || [];
+      const currLists = state.lists || [];
+      const listsToUpsert = currLists.filter(l => {
+        const prev = prevLists.find(p => String(p.id) === String(l.id));
+        return !prev || prev.name !== l.name;
+      });
+      const listsToDelete = state.deletedIds?.lists || [];
+
+      // 2. Tasks
+      const prevTasks = lastSyncedState.tasks || [];
+      const currTasks = state.tasks || [];
+      const tasksToUpsert = currTasks.filter(t => {
+        const prev = prevTasks.find(p => String(p.id) === String(t.id));
+        if (!prev) return true;
+        return (
+          prev.name !== t.name ||
+          prev.done !== t.done ||
+          prev.starred !== t.starred ||
+          String(prev.listId) !== String(t.listId) ||
+          prev.cat !== t.cat ||
+          prev.date !== t.date ||
+          prev.time !== t.time ||
+          prev.repeatType !== t.repeatType ||
+          prev.repeatValue !== t.repeatValue ||
+          prev.deadline !== t.deadline ||
+          prev.details !== t.details ||
+          JSON.stringify(prev.subtasks) !== JSON.stringify(t.subtasks)
+        );
+      });
+      const tasksToDelete = state.deletedIds?.tasks || [];
+
+      // 3. Sessions
+      const prevSessions = lastSyncedState.sessions || [];
+      const currSessions = state.sessions || [];
+      const sessionsToUpsert = currSessions.filter(s => {
+        const prev = prevSessions.find(p => String(p.id) === String(s.id));
+        if (!prev) return true;
+        return (
+          prev.name !== s.name ||
+          prev.icon !== s.icon ||
+          prev.color !== s.color ||
+          JSON.stringify(prev.steps) !== JSON.stringify(s.steps)
+        );
+      });
+      const sessionsToDelete = state.deletedIds?.sessions || [];
+
+      // 4. Goals (weekly, monthly, static combined in DB)
+      const getGoalKey = (g: any, type: string) => `${type}_${g.id}`;
+      const getGoalsList = (s: AppState) => [
+        ...(s.weekly || []).map(g => ({ ...g, type: 'weekly' })),
+        ...(s.monthly || []).map(g => ({ ...g, type: 'monthly' })),
+        ...(s.static || []).map(g => ({ ...g, type: 'static' }))
+      ];
+      const prevGoals = getGoalsList(lastSyncedState);
+      const currGoals = getGoalsList(state);
+      const goalsToUpsert = currGoals.filter(g => {
+        const prev = prevGoals.find(p => getGoalKey(p, p.type) === getGoalKey(g, g.type));
+        if (!prev) return true;
+        return (
+          prev.name !== g.name ||
+          (prev as any).target !== (g as any).target ||
+          (prev as any).current !== (g as any).current ||
+          (prev as any).emoji !== (g as any).emoji ||
+          (prev as any).note !== (g as any).note ||
+          (prev as any).cat !== (g as any).cat ||
+          (prev as any).progress !== (g as any).progress
+        );
+      });
+      const goalsToDelete = state.deletedIds?.goals || [];
+
+      // 5. Journals
+      const prevJournals = lastSyncedState.journals || [];
+      const currJournals = state.journals || [];
+      const journalsToUpsert = currJournals.filter(j => {
+        const prev = prevJournals.find(p => String(p.id) === String(j.id));
+        if (!prev) return true;
+        return prev.title !== j.title || prev.content !== j.content;
+      });
+      const journalsToDelete = state.deletedIds?.journals || [];
+
+      // 6. Profile stats
+      const prevProfile = { streak: lastSyncedState.streak, completionHistory: lastSyncedState.completionHistory, lastActiveDate: lastSyncedState.lastActiveDate };
+      const currProfile = { streak: state.streak, completionHistory: state.completionHistory, lastActiveDate: state.lastActiveDate };
+      const profileChanged = 
+        prevProfile.streak !== currProfile.streak ||
+        prevProfile.lastActiveDate !== currProfile.lastActiveDate ||
+        JSON.stringify(prevProfile.completionHistory) !== JSON.stringify(currProfile.completionHistory);
+
+      let hasSynced = false;
+
+      // ─── EXECUTE DELTA DATABASE WRITES ───
+
+      // 1. Sync lists
+      if (listsToUpsert.length > 0) {
+        const payloads = listsToUpsert.map(l => ({ id: l.id, user_id: userId, name: l.name }));
+        const { error } = await client.from('lists').upsert(payloads, { onConflict: 'id' });
+        if (error) console.error('Supabase upsert error [lists]:', error.message);
+        hasSynced = true;
+      }
+      if (listsToDelete.length > 0) {
+        const { error } = await client.from('lists').delete().in('id', listsToDelete);
+        if (error) console.error('Supabase delete error [lists]:', error.message);
+        hasSynced = true;
       }
 
-      // 0b. Delete lists
-      if (state.deletedIds?.lists && state.deletedIds.lists.length > 0) {
-        try {
-          const { error } = await client.from('lists').delete().in('id', state.deletedIds.lists);
-          if (error) {
-            console.error('Supabase delete error [lists]:', error.message);
-          } else if (storeRef) {
-            storeRef.setState({
-              deletedIds: {
-                ...storeRef.getState().deletedIds,
-                lists: []
-              }
-            }, true);
-          }
-        } catch (err) {
-          console.warn('Failed to delete lists from Supabase:', err);
-        }
-      }
-
-      // 1. Sync tasks (always upsert regardless of array length)
-      try {
-        const taskPayloads = (state.tasks || []).map(t => {
+      // 2. Sync tasks & subtasks
+      if (tasksToUpsert.length > 0) {
+        const payloads = tasksToUpsert.map(t => {
           let parsedRepeatValue = null;
           if (t.repeatValue) {
             try {
@@ -85,7 +189,7 @@ export function triggerSync(): void {
           return {
             id: t.id,
             user_id: userId,
-            list_id: (t.listId === 'toady' || !t.listId) ? null : Number(t.listId),
+            list_id: (t.listId === 'toady' || !t.listId) ? null : (typeof t.listId === 'number' ? t.listId : t.listId),
             name: t.name,
             cat: t.cat || '',
             done: t.done,
@@ -98,17 +202,11 @@ export function triggerSync(): void {
             details: t.details || null
           };
         });
-        if (taskPayloads.length > 0) {
-          const { error } = await client.from('tasks').upsert(taskPayloads, { onConflict: 'id' });
-          if (error) console.error('Supabase upsert error [tasks]:', error.message, error.details);
-        }
-      } catch (err) {
-        console.warn('Failed to sync tasks to Supabase:', err);
-      }
+        const { error } = await client.from('tasks').upsert(payloads, { onConflict: 'id' });
+        if (error) console.error('Supabase upsert error [tasks]:', error.message);
 
-      // 1b. Sync subtasks relationally
-      try {
-        const subtaskPayloads = (state.tasks || []).flatMap(t => 
+        // relational subtasks upsert (only for tasks that actually changed!)
+        const subtaskPayloads = tasksToUpsert.flatMap(t => 
           (t.subtasks || []).map(st => ({
             id: st.id,
             task_id: t.id,
@@ -121,152 +219,77 @@ export function triggerSync(): void {
           if (upsertErr) console.error('Supabase upsert error [subtasks]:', upsertErr.message);
 
           const activeSubtaskIds = subtaskPayloads.map(st => st.id);
-          const activeTaskIds = (state.tasks || []).map(t => t.id);
-          if (activeTaskIds.length > 0) {
-            const { error: deleteErr } = await client
-              .from('subtasks')
-              .delete()
-              .in('task_id', activeTaskIds)
-              .not('id', 'in', `(${activeSubtaskIds.join(',')})`);
-            if (deleteErr) console.error('Supabase subtask cleanup error:', deleteErr.message);
-          }
+          const activeTaskIds = tasksToUpsert.map(t => t.id);
+          const { error: deleteErr } = await client
+            .from('subtasks')
+            .delete()
+            .in('task_id', activeTaskIds)
+            .not('id', 'in', `(${activeSubtaskIds.join(',')})`);
+          if (deleteErr) console.error('Supabase subtask cleanup error:', deleteErr.message);
         } else {
-          const activeTaskIds = (state.tasks || []).map(t => t.id);
-          if (activeTaskIds.length > 0) {
-            await client.from('subtasks').delete().in('task_id', activeTaskIds);
-          }
+          const activeTaskIds = tasksToUpsert.map(t => t.id);
+          await client.from('subtasks').delete().in('task_id', activeTaskIds);
         }
-      } catch (err) {
-        console.warn('Failed to sync subtasks to Supabase:', err);
+        hasSynced = true;
+      }
+      if (tasksToDelete.length > 0) {
+        const { error } = await client.from('tasks').delete().in('id', tasksToDelete);
+        if (error) console.error('Supabase delete error [tasks]:', error.message);
+        hasSynced = true;
       }
 
-      // 1c. Delete tasks
-      if (state.deletedIds?.tasks && state.deletedIds.tasks.length > 0) {
-        try {
-          const { error } = await client.from('tasks').delete().in('id', state.deletedIds.tasks);
-          if (error) {
-            console.error('Supabase delete error [tasks]:', error.message);
-          } else if (storeRef) {
-            storeRef.setState({
-              deletedIds: {
-                ...storeRef.getState().deletedIds,
-                tasks: []
-              }
-            }, true);
-          }
-        } catch (err) {
-          console.warn('Failed to delete tasks from Supabase:', err);
-        }
+      // 3. Sync sessions
+      if (sessionsToUpsert.length > 0) {
+        const payloads = sessionsToUpsert.map(s => ({ id: s.id, user_id: userId, name: s.name, icon: s.icon, color: s.color, steps: s.steps }));
+        const { error } = await client.from('sessions').upsert(payloads, { onConflict: 'id' });
+        if (error) console.error('Supabase upsert error [sessions]:', error.message);
+        hasSynced = true;
+      }
+      if (sessionsToDelete.length > 0) {
+        const { error } = await client.from('sessions').delete().in('id', sessionsToDelete);
+        if (error) console.error('Supabase delete error [sessions]:', error.message);
+        hasSynced = true;
       }
 
-      // 2. Sync sessions (always upsert regardless of array length)
-      try {
-        const sessionPayloads = (state.sessions || []).map(s => ({
-          id: s.id,
+      // 4. Sync goals
+      if (goalsToUpsert.length > 0) {
+        const payloads = goalsToUpsert.map(g => ({
+          id: g.id,
           user_id: userId,
-          name: s.name,
-          icon: s.icon,
-          color: s.color,
-          steps: s.steps
+          type: g.type,
+          name: g.name,
+          target: g.type === 'static' ? 100 : (g as any).target,
+          current: g.type === 'static' ? (g as any).progress : (g as any).current,
+          emoji: (g as any).emoji || '🎯',
+          note: (g as any).note || '',
+          cat: (g as any).cat || 'other',
+          progress: (g as any).progress || 0
         }));
-        if (sessionPayloads.length > 0) {
-          const { error } = await client.from('sessions').upsert(sessionPayloads, { onConflict: 'id' });
-          if (error) console.error('Supabase upsert error [sessions]:', error.message, error.details);
-        }
-      } catch (err) {
-        console.warn('Failed to sync sessions to Supabase:', err);
+        const { error } = await client.from('goals').upsert(payloads, { onConflict: 'id' });
+        if (error) console.error('Supabase upsert error [goals]:', error.message);
+        hasSynced = true;
+      }
+      if (goalsToDelete.length > 0) {
+        const { error } = await client.from('goals').delete().in('id', goalsToDelete);
+        if (error) console.error('Supabase delete error [goals]:', error.message);
+        hasSynced = true;
       }
 
-      // 2b. Delete sessions
-      if (state.deletedIds?.sessions && state.deletedIds.sessions.length > 0) {
-        try {
-          const { error } = await client.from('sessions').delete().in('id', state.deletedIds.sessions);
-          if (error) {
-            console.error('Supabase delete error [sessions]:', error.message);
-          } else if (storeRef) {
-            storeRef.setState({
-              deletedIds: {
-                ...storeRef.getState().deletedIds,
-                sessions: []
-              }
-            }, true);
-          }
-        } catch (err) {
-          console.warn('Failed to delete sessions from Supabase:', err);
-        }
+      // 5. Sync journals
+      if (journalsToUpsert.length > 0) {
+        const payloads = journalsToUpsert.map(j => ({ id: j.id, user_id: userId, title: j.title || '', content: j.content }));
+        const { error } = await client.from('journals').upsert(payloads, { onConflict: 'id' });
+        if (error) console.error('Supabase upsert error [journals]:', error.message);
+        hasSynced = true;
+      }
+      if (journalsToDelete.length > 0) {
+        const { error } = await client.from('journals').delete().in('id', journalsToDelete);
+        if (error) console.error('Supabase delete error [journals]:', error.message);
+        hasSynced = true;
       }
 
-      // 3. Sync goals (weekly, monthly, static — always upsert regardless of array length)
-      try {
-        const goalPayloads = [
-          ...(state.weekly || []).map(g => ({ id: g.id, user_id: userId, type: 'weekly', name: g.name, target: g.target, current: g.current, emoji: '🎯', note: '', cat: 'other', progress: 0 })),
-          ...(state.monthly || []).map(g => ({ id: g.id, user_id: userId, type: 'monthly', name: g.name, target: g.target, current: g.current, emoji: '🎯', note: '', cat: 'other', progress: 0 })),
-          ...(state.static || []).map(g => ({ id: g.id, user_id: userId, type: 'static', name: g.name, target: 100, current: g.progress, emoji: g.emoji, note: g.note || '', cat: g.cat || 'other', progress: g.progress }))
-        ];
-        if (goalPayloads.length > 0) {
-          const { error } = await client.from('goals').upsert(goalPayloads, { onConflict: 'id' });
-          if (error) console.error('Supabase upsert error [goals]:', error.message, error.details);
-        }
-      } catch (err) {
-        console.warn('Failed to sync goals to Supabase:', err);
-      }
-
-      // 3b. Delete goals
-      if (state.deletedIds?.goals && state.deletedIds.goals.length > 0) {
-        try {
-          const { error } = await client.from('goals').delete().in('id', state.deletedIds.goals);
-          if (error) {
-            console.error('Supabase delete error [goals]:', error.message);
-          } else if (storeRef) {
-            storeRef.setState({
-              deletedIds: {
-                ...storeRef.getState().deletedIds,
-                goals: []
-              }
-            }, true);
-          }
-        } catch (err) {
-          console.warn('Failed to delete goals from Supabase:', err);
-        }
-      }
-
-      // 4. Sync journals (always upsert regardless of array length)
-      try {
-        const journalPayloads = (state.journals || []).map(j => ({
-          id: j.id,
-          user_id: userId,
-          title: j.title || '',
-          content: typeof j.content === 'string' ? j.content : JSON.stringify(j.content)
-        }));
-        if (journalPayloads.length > 0) {
-          const { error } = await client.from('journals').upsert(journalPayloads, { onConflict: 'id' });
-          if (error) console.error('Supabase upsert error [journals]:', error.message, error.details);
-        }
-      } catch (err) {
-        console.warn('Failed to sync journals to Supabase:', err);
-      }
-
-      // 4b. Delete journals
-      if (state.deletedIds?.journals && state.deletedIds.journals.length > 0) {
-        try {
-          const { error } = await client.from('journals').delete().in('id', state.deletedIds.journals);
-          if (error) {
-            console.error('Supabase delete error [journals]:', error.message);
-          } else if (storeRef) {
-            storeRef.setState({
-              deletedIds: {
-                ...storeRef.getState().deletedIds,
-                journals: []
-              }
-            }, true);
-          }
-        } catch (err) {
-          console.warn('Failed to delete journals from Supabase:', err);
-        }
-      }
-
-      // 5. Sync profile stats
-      try {
+      // 6. Sync profile
+      if (profileChanged) {
         const { error } = await client.from('profiles').upsert({
           id: userId,
           streak: state.streak || 0,
@@ -274,16 +297,27 @@ export function triggerSync(): void {
           last_active_date: state.lastActiveDate || new Date().toDateString(),
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
-        if (error) console.error('Supabase upsert error [profiles]:', error.message, error.details);
-      } catch (err) {
-        console.warn('Failed to sync profile to Supabase:', err);
+        if (error) console.error('Supabase upsert error [profiles]:', error.message);
+        hasSynced = true;
       }
 
-      console.log('✅ Supabase background sync success.');
+      // Baseline synced state
+      lastSyncedState = JSON.parse(JSON.stringify(state));
+
+      // Reset deletedIds state locally in one single update
+      if (storeRef) {
+        storeRef.setState({
+          deletedIds: { tasks: [], sessions: [], goals: [], journals: [], lists: [] }
+        }, true);
+      }
+
+      if (hasSynced) {
+        console.log('✅ Supabase background sync: synced modified rows.');
+      }
     } catch (e: any) {
-      console.warn('Supabase background sync connection failed (will retry on next change):', e.message);
+      console.warn('Supabase background sync connection failed:', e.message);
     }
-  }, 2000); // 2 second debounce delay
+  }, 2000);
 }
 
 /**

@@ -127,8 +127,31 @@ export const getNextOccurrenceDate = (
   return null;
 };
 
+export const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+export const generateSecureNumericId = (): number => {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const array = new Uint32Array(2);
+    crypto.getRandomValues(array);
+    const high = array[0] & 0x1fffff; // 21 bits
+    const low = array[1]; // 32 bits
+    const id = (high * 0x100000000) + low;
+    return id === 0 ? 1 : id;
+  }
+  return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER) + 1;
+};
+
 export interface ParsedTask {
-  id: number;
+  id: number | string;
   name: string;
   done: boolean;
   listId: number | string;
@@ -150,7 +173,7 @@ export function parseTask(t: Task): ParsedTask {
     done: t.done,
     listId: t.listId || 'toady', // legacy Toady view tasks or daily items
     starred: t.starred || false,
-    createdAt: t.createdAt || t.id,
+    createdAt: t.createdAt || (typeof t.id === 'number' ? t.id : Date.now()),
     date: t.date || undefined,
     time: t.time || undefined,
     repeatType: t.repeatType || 'none',

@@ -17,12 +17,13 @@ import { store } from '../services/db';
 import type { AppState, Task, Session, WeeklyGoal, MonthlyGoal, StaticGoal } from '../types';
 import TaskItem from '../components/TaskItem';
 import AddTaskModal from '../components/AddTaskModal';
+import { generateSecureNumericId } from '../utils/taskHelper';
 
 interface ToadyViewProps {
   state: AppState;
-  onEditTask: (id: number) => void;
-  onToggleTask: (id: number) => void;
-  onDeleteTask: (id: number) => void;
+  onEditTask: (id: number | string) => void;
+  onToggleTask: (id: number | string) => void;
+  onDeleteTask: (id: number | string) => void;
 }
 
 export default function ToadyView({
@@ -99,7 +100,7 @@ export default function ToadyView({
     store.setState({ sessions: updated });
   };
 
-  const handleToggleStar = (taskId: number, e: React.MouseEvent) => {
+  const handleToggleStar = (taskId: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = state.tasks.map(t => {
       if (t.id === taskId) {
@@ -114,7 +115,7 @@ export default function ToadyView({
     store.setState({ tasks: updated });
   };
 
-  const handleDeleteTask = (taskId: number, e: React.MouseEvent) => {
+  const handleDeleteTask = (taskId: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (window.confirm('Delete this task?')) {
       onDeleteTask(taskId);
@@ -147,7 +148,7 @@ export default function ToadyView({
     repeatType: 'none' | 'daily' | 'custom';
     repeatValue: string;
   }) => {
-    const newTaskId = Date.now();
+    const newTaskId = generateSecureNumericId();
     const newTask: Task = {
       id: newTaskId,
       name: taskData.name,
@@ -181,7 +182,7 @@ export default function ToadyView({
       });
 
     const newSession: Session = {
-      id: Date.now(),
+      id: generateSecureNumericId(),
       name: sessionName.trim(),
       icon: sessionIcon.trim() || '⚡',
       color: sessionColor,
@@ -200,7 +201,7 @@ export default function ToadyView({
     e.preventDefault();
     if (!goalName.trim()) return;
     const newGoal = {
-      id: Date.now(),
+      id: generateSecureNumericId(),
       name: goalName.trim(),
       target: parseInt(goalTarget as string, 10) || 5,
       current: parseInt(goalCurrent as string, 10) || 0,
@@ -223,7 +224,7 @@ export default function ToadyView({
     e.preventDefault();
     if (!lifeGoalName.trim()) return;
     const newLifeGoal: StaticGoal = {
-      id: Date.now(),
+      id: generateSecureNumericId(),
       name: lifeGoalName.trim(),
       emoji: lifeGoalEmoji.trim() || '🎯',
       note: lifeGoalNote.trim(),

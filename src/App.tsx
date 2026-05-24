@@ -1,5 +1,6 @@
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import AuthScreen from './components/AuthScreen';
 import TopBar from './components/TopBar';
 import BottomNav from './components/BottomNav';
@@ -11,23 +12,9 @@ import SyncConfig from './components/SyncConfig';
 import TaskDetailView from './components/TaskDetailView';
 import { store } from './services/db';
 import type { AppState, Task } from './types';
-import { getLocalDateString, getNextOccurrenceDate } from './utils/taskHelper';
+import { getLocalDateString, getNextOccurrenceDate, generateSecureNumericId } from './utils/taskHelper';
 
-// Theme Context Interface
-interface ThemeContextType {
-  theme: string;
-  toggleTheme: () => void;
-}
-
-export const ThemeContext = createContext<ThemeContextType | null>(null);
-
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
+// Theme Context moved to context/ThemeContext.tsx
 
 /* ─── Loading splash shown while Supabase restores the session ─── */
 function LoadingSplash() {
@@ -71,7 +58,7 @@ function AuthenticatedApp() {
   const [state, setState] = useState<AppState>(store.getState());
   const [activeTab, setActiveTab] = useState<string>('toady');
   const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
-  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editingTaskId, setEditingTaskId] = useState<number | string | null>(null);
 
   useEffect(() => {
     const unsubscribe = store.subscribe((newState) => {
@@ -80,7 +67,7 @@ function AuthenticatedApp() {
     return unsubscribe;
   }, []);
 
-  const handleGlobalToggleTask = (taskId: number) => {
+  const handleGlobalToggleTask = (taskId: number | string) => {
     let newTaskToSpawn: Task | null = null;
     
     const updated = state.tasks.map(t => {
@@ -92,7 +79,7 @@ function AuthenticatedApp() {
           const nextDateStr = getNextOccurrenceDate(currentDateStr, t.repeatType, t.repeatValue || '');
           
           if (nextDateStr) {
-            const newTaskId = Date.now() + 1;
+            const newTaskId = generateSecureNumericId();
             let nextRepeatValue = t.repeatValue || '';
             
             if (t.repeatType === 'custom' && t.repeatValue) {
@@ -115,7 +102,7 @@ function AuthenticatedApp() {
               done: false,
               listId: t.listId,
               starred: t.starred || false,
-              createdAt: newTaskId,
+              createdAt: Date.now(),
               date: nextDateStr,
               time: t.time,
               repeatType: t.repeatType,
@@ -146,7 +133,7 @@ function AuthenticatedApp() {
     }
   };
 
-  const handleGlobalDeleteTask = (taskId: number) => {
+  const handleGlobalDeleteTask = (taskId: number | string) => {
     const updated = state.tasks.filter(t => t.id !== taskId);
     const deletedIds = {
       ...(state.deletedIds || {}),
@@ -233,26 +220,11 @@ function AuthGate() {
 
 /* ─── Root export ─── */
 export default function App() {
-  const [theme, setTheme] = useState<string>(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved) return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(t => t === 'light' ? 'dark' : 'light');
-  };
-
   return (
     <AuthProvider>
-      <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      <ThemeProvider>
         <AuthGate />
-      </ThemeContext.Provider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

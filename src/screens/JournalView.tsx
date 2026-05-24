@@ -3,18 +3,19 @@ import { IconPlus, IconChevronRight, IconArrowLeft, IconBook } from '@tabler/ico
 import NotionEditor from '../components/NotionEditor';
 import { store } from '../services/db';
 import type { AppState, JournalEntry } from '../types';
+import { generateSecureNumericId } from '../utils/taskHelper';
 
 interface JournalViewProps {
   state: AppState;
 }
 
 export default function JournalView({ state }: JournalViewProps) {
-  const [activeEntryId, setActiveEntryId] = useState<number | null>(null);
+  const [activeEntryId, setActiveEntryId] = useState<number | string | null>(null);
 
   const activeEntry = state.journals.find((j) => j.id === activeEntryId);
 
   const handleCreateNew = () => {
-    const newId = Date.now();
+    const newId = generateSecureNumericId();
     const newEntry: JournalEntry = {
       id: newId,
       title: '',

@@ -7,13 +7,13 @@ import { store } from '../services/db';
 import type { AppState, Task } from '../types';
 import AddTaskModal from '../components/AddTaskModal';
 import TasksContainer from '../components/TasksContainer';
-import { parseTask } from '../utils/taskHelper';
+import { parseTask, generateSecureNumericId } from '../utils/taskHelper';
 
 interface TasksViewProps {
   state: AppState;
-  onEditTask: (id: number) => void;
-  onToggleTask: (id: number) => void;
-  onDeleteTask: (id: number) => void;
+  onEditTask: (id: number | string) => void;
+  onToggleTask: (id: number | string) => void;
+  onDeleteTask: (id: number | string) => void;
 }
 
 export default function TasksView({
@@ -36,7 +36,7 @@ export default function TasksView({
     .map(t => parseTask(t));
 
   // Calculate active task count per list
-  const getActiveCount = (listId: number) => {
+  const getActiveCount = (listId: number | string) => {
     return customTasks.filter(t => t.listId === listId && !t.done).length;
   };
 
@@ -44,7 +44,7 @@ export default function TasksView({
   const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListName.trim()) return;
-    const newListId = Date.now();
+    const newListId = generateSecureNumericId();
     const newList = {
       id: newListId,
       name: newListName.trim()
@@ -55,7 +55,7 @@ export default function TasksView({
     setActiveListId(newListId);
   };
 
-  const handleDeleteList = (listId: number) => {
+  const handleDeleteList = (listId: number | string) => {
     if (window.confirm('Are you sure you want to delete this list and all its tasks?')) {
       const updatedLists = (state.lists || []).filter(l => l.id !== listId);
       const updatedTasks = (state.tasks || []).filter(t => t.listId !== listId);
@@ -77,10 +77,10 @@ export default function TasksView({
     repeatType: 'none' | 'daily' | 'custom';
     repeatValue: string;
   }) => {
-    const listId = activeListId === 'starred' ? 1001 : Number(activeListId);
+    const listId = activeListId === 'starred' ? 1001 : (isNaN(Number(activeListId)) ? activeListId : Number(activeListId));
     const isStarred = activeListId === 'starred';
 
-    const newTaskId = Date.now();
+    const newTaskId = generateSecureNumericId();
     const newTask: Task = {
       id: newTaskId,
       name: taskData.name,
@@ -99,7 +99,7 @@ export default function TasksView({
     store.setState({ tasks: [...state.tasks, newTask] });
   };
 
-  const handleToggleStar = (taskId: number, e: React.MouseEvent) => {
+  const handleToggleStar = (taskId: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = state.tasks.map(t => {
       if (t.id === taskId) {
@@ -110,7 +110,7 @@ export default function TasksView({
     store.setState({ tasks: updated });
   };
 
-  const handleDeleteTask = (taskId: number, e: React.MouseEvent) => {
+  const handleDeleteTask = (taskId: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     onDeleteTask(taskId);
   };

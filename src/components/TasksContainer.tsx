@@ -17,11 +17,11 @@ interface TasksContainerProps {
   state: AppState;
   activeListId: string | number;
   activeListName: string;
-  handleToggleTask: (taskId: number) => void;
-  handleToggleStar: (taskId: number, e: React.MouseEvent) => void;
-  handleDeleteTask: (taskId: number, e: React.MouseEvent) => void;
-  handleDeleteList: (listId: number) => void;
-  onEditTask: (id: number) => void;
+  handleToggleTask: (taskId: number | string) => void;
+  handleToggleStar: (taskId: number | string, e: React.MouseEvent) => void;
+  handleDeleteTask: (taskId: number | string, e: React.MouseEvent) => void;
+  handleDeleteList: (listId: number | string) => void;
+  onEditTask: (id: number | string) => void;
 }
 
 export default function TasksContainer({
@@ -68,7 +68,7 @@ export default function TasksContainer({
   }, []);
 
   // Helper functions for drag and drop order
-  const getTasksOrder = (listId: string | number): number[] => {
+  const getTasksOrder = (listId: string | number): (number | string)[] => {
     try {
       const stored = localStorage.getItem(`tasks_order_${listId}`);
       return stored ? JSON.parse(stored) : [];
@@ -77,7 +77,7 @@ export default function TasksContainer({
     }
   };
 
-  const saveTasksOrder = (listId: string | number, order: number[]) => {
+  const saveTasksOrder = (listId: string | number, order: (number | string)[]) => {
     try {
       localStorage.setItem(`tasks_order_${listId}`, JSON.stringify(order));
     } catch (e) {
@@ -95,7 +95,7 @@ export default function TasksContainer({
     if (activeListId === 'starred') {
       return customTasks.filter(t => t.starred);
     }
-    return customTasks.filter(t => t.listId === Number(activeListId));
+    return customTasks.filter(t => String(t.listId) === String(activeListId));
   })();
 
   // Sorting logics
@@ -145,19 +145,19 @@ export default function TasksContainer({
     const missingIds = filteredTasks.filter(t => !currentOrder.includes(t.id)).map(t => t.id);
     let finalOrder = [...currentOrder, ...missingIds];
 
-    const dragIndex = finalOrder.indexOf(Number(dragId));
-    const targetIndex = finalOrder.indexOf(Number(targetId));
+    const dragIndex = finalOrder.indexOf(dragId);
+    const targetIndex = finalOrder.indexOf(targetId);
 
     if (dragIndex !== -1 && targetIndex !== -1) {
       finalOrder.splice(dragIndex, 1);
-      finalOrder.splice(targetIndex, 0, Number(dragId));
+      finalOrder.splice(targetIndex, 0, dragId);
       saveTasksOrder(activeListId, finalOrder);
     }
 
     // 2. Reorder array in store.tasks to sync to server
     const storeTasks = [...state.tasks];
-    const storeDragIdx = storeTasks.findIndex(t => t.id === Number(dragId));
-    const storeTargetIdx = storeTasks.findIndex(t => t.id === Number(targetId));
+    const storeDragIdx = storeTasks.findIndex(t => String(t.id) === String(dragId));
+    const storeTargetIdx = storeTasks.findIndex(t => String(t.id) === String(targetId));
     if (storeDragIdx !== -1 && storeTargetIdx !== -1) {
       const [dragged] = storeTasks.splice(storeDragIdx, 1);
       storeTasks.splice(storeTargetIdx, 0, dragged);
@@ -355,7 +355,7 @@ export default function TasksContainer({
                 {menuOpenListId === activeListId && (
                   <div className="tasks-dropdown-menu">
                     <button
-                      onClick={() => handleDeleteList(Number(activeListId))}
+                      onClick={() => handleDeleteList(activeListId)}
                       className="dropdown-item danger"
                     >
                       <IconTrash size={14} />

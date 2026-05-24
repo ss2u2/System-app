@@ -5,7 +5,7 @@ export interface Step {
 }
 
 export interface Session {
-  id: number;
+  id: number | string;
   name: string;
   icon: string;
   color: string;
@@ -14,7 +14,7 @@ export interface Session {
 }
 
 export interface Task {
-  id: number;
+  id: number | string;
   name: string;
   cat: string;
   done: boolean;
@@ -31,21 +31,21 @@ export interface Task {
 }
 
 export interface WeeklyGoal {
-  id: number;
+  id: number | string;
   name: string;
   target: number;
   current: number;
 }
 
 export interface MonthlyGoal {
-  id: number;
+  id: number | string;
   name: string;
   target: number;
   current: number;
 }
 
 export interface StaticGoal {
-  id: number;
+  id: number | string;
   name: string;
   emoji: string;
   note: string;
@@ -63,17 +63,17 @@ export interface JournalBlock {
 }
 
 export interface JournalEntry {
-  id: number;
+  id: number | string;
   title: string;
   content: string; // JSON-stringified JournalBlock[]
 }
 
 export interface DeletedIds {
-  tasks: number[];
-  sessions: number[];
-  goals: number[];
-  journals: number[];
-  lists: number[];
+  tasks: (number | string)[];
+  sessions: (number | string)[];
+  goals: (number | string)[];
+  journals: (number | string)[];
+  lists: (number | string)[];
 }
 
 export interface AppState {
@@ -98,18 +98,18 @@ export interface AppStore {
 }
 
 export interface CustomList {
-  id: number;
+  id: number | string;
   name: string;
 }
 
 export interface SubTask {
-  id: number;
+  id: number | string;
   name: string;
   done: boolean;
 }
 
 export interface CustomTask {
-  id: number;
+  id: number | string;
   listId: number | string;
   name: string;
   done: boolean;
@@ -121,6 +121,7 @@ export interface CustomTask {
   details?: string;
   subtasks?: SubTask[];
 }
+
 
 
 

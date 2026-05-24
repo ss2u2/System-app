@@ -13,6 +13,7 @@ import {
   IconCheck,
 } from '@tabler/icons-react';
 import type { JournalBlock } from '../types';
+import { generateUUID } from '../utils/taskHelper';
 
 interface NotionEditorProps {
   initialContent: string;
@@ -175,7 +176,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
     // Standard Editor Shortcuts
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const newBlockId = Date.now().toString();
+      const newBlockId = generateUUID();
 
       // Inherit properties
       let newType = 'text';
@@ -274,7 +275,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
   };
 
   const addNewBlockFloat = (index: number) => {
-    const newId = Date.now().toString();
+    const newId = generateUUID();
     const newBlock: JournalBlock = {
       id: newId,
       type: 'text',

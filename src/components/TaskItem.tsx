@@ -15,10 +15,10 @@ import { store } from '../services/db';
 
 interface TaskItemProps {
   task: Task;
-  onToggle: (id: number) => void;
-  onToggleStar?: (id: number, e: React.MouseEvent) => void;
-  onDelete: (id: number, e: React.MouseEvent) => void;
-  onEdit?: (id: number) => void;
+  onToggle: (id: number | string) => void;
+  onToggleStar?: (id: number | string, e: React.MouseEvent) => void;
+  onDelete: (id: number | string, e: React.MouseEvent) => void;
+  onEdit?: (id: number | string) => void;
   isDragging?: boolean;
 }
 

@@ -35,44 +35,33 @@ export default function SyncConfig({ isOpen, onClose }: SyncConfigProps) {
       className="modal-overlay open"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="modal" style={{ width: '92%', maxWidth: '400px' }}>
+      <div className="modal w-[92%] max-w-[400px]">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
-          <div className="modal-title !mb-0 font-bold text-lg">Account</div>
-          <button onClick={onClose} className="text-[#5c5b6e] hover:text-[#f0eff5] cursor-pointer">
+          <div className="modal-title !mb-0 font-bold text-lg text-[var(--text)]">Account</div>
+          <button onClick={onClose} className="text-[#5c5b6e] hover:text-[var(--text)] cursor-pointer">
             <IconX size={18} />
           </button>
         </div>
 
         {/* Avatar + user info */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 16,
-          padding: '16px', borderRadius: 14,
-          background: '#1e1e22', border: '1px solid #2e2e36',
-          marginBottom: 20,
-        }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #7c6af7, #a594ff)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20, fontWeight: 700, color: '#fff', flexShrink: 0,
-            overflow: 'hidden',
-          }}>
+        <div className="flex items-center gap-4 p-4 rounded-[14px] bg-[var(--bg3)] border border-[var(--border)] mb-5">
+          <div className="w-[52px] h-[52px] rounded-full bg-gradient-to-br from-[var(--accent)] to-[var(--accent2)] flex items-center justify-center text-lg font-bold text-white shrink-0 overflow-hidden">
             {getAvatarUrl()
-              ? <img src={getAvatarUrl()} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img src={getAvatarUrl()} alt="avatar" className="w-full h-full object-cover" />
               : getInitials()
             }
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#f0eff5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-[var(--text)] truncate">
               {getDisplayName()}
             </div>
-            <div style={{ fontSize: 12, color: '#5c5b6e', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div className="text-xs text-[var(--text3)] mt-0.5 truncate">
               {user?.email}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 6 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 500 }}>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] shrink-0" />
+              <span className="text-[11px] text-[#4ade80] font-semibold">
                 {loadingData ? 'Syncing…' : 'Synced to cloud'}
               </span>
             </div>
@@ -80,30 +69,22 @@ export default function SyncConfig({ isOpen, onClose }: SyncConfigProps) {
         </div>
 
         {/* Status cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            padding: '12px 14px', borderRadius: 12,
-            background: '#0d2a1a', border: '1px solid rgba(74,222,128,0.2)',
-          }}>
-            <IconCloudCheck size={18} style={{ color: '#4ade80', flexShrink: 0 }} />
+        <div className="flex flex-col gap-2.5 mb-6">
+          <div className="flex items-center gap-3 p-3 px-3.5 rounded-xl bg-[var(--green-bg)] border border-[var(--green)] border-opacity-20">
+            <IconCloudCheck size={18} className="text-[var(--green)] shrink-0" />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#4ade80' }}>Cloud Sync Active</div>
-              <div style={{ fontSize: 11, color: '#5c5b6e', marginTop: 1 }}>
+              <div className="text-[13px] font-semibold text-[var(--green)]">Cloud Sync Active</div>
+              <div className="text-[11px] text-[var(--text3)] mt-0.5">
                 All your data is automatically backed up in real-time.
               </div>
             </div>
           </div>
 
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            padding: '12px 14px', borderRadius: 12,
-            background: '#1a1a2e', border: '1px solid rgba(124,106,247,0.2)',
-          }}>
-            <IconShield size={18} style={{ color: '#7c6af7', flexShrink: 0 }} />
+          <div className="flex items-center gap-3 p-3 px-3.5 rounded-xl bg-[var(--accent-bg)] border border-[var(--accent)] border-opacity-20">
+            <IconShield size={18} className="text-[var(--accent)] shrink-0" />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#a594ff' }}>Private & Secure</div>
-              <div style={{ fontSize: 11, color: '#5c5b6e', marginTop: 1 }}>
+              <div className="text-[13px] font-semibold text-[var(--accent)]">Private & Secure</div>
+              <div className="text-[11px] text-[var(--text3)] mt-0.5">
                 Row-level security — only you can access your data.
               </div>
             </div>
@@ -111,16 +92,11 @@ export default function SyncConfig({ isOpen, onClose }: SyncConfigProps) {
         </div>
 
         {/* User ID */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: '#5c5b6e', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+        <div className="mb-5">
+          <div className="text-[11px] text-[var(--text3)] font-semibold uppercase tracking-wider mb-1.5">
             Account ID
           </div>
-          <div style={{
-            padding: '8px 12px', borderRadius: 8,
-            background: '#0f0f11', border: '1px solid #1e1e22',
-            fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#3a3a45',
-            wordBreak: 'break-all',
-          }}>
+          <div className="p-2 px-3 rounded-lg bg-[var(--bg)] border border-[var(--border)] font-mono text-[11px] text-[var(--text2)] word-break break-all select-all">
             {user?.id}
           </div>
         </div>
@@ -129,15 +105,7 @@ export default function SyncConfig({ isOpen, onClose }: SyncConfigProps) {
         <button
           id="account-signout-btn"
           onClick={handleSignOut}
-          style={{
-            width: '100%', padding: '11px',
-            background: 'none', border: '1px solid rgba(248,113,113,0.3)',
-            borderRadius: 12, color: '#f87171', fontSize: 14, fontWeight: 600,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: 8, transition: 'all 0.2s', fontFamily: 'inherit',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#2a0f0f'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+          className="w-full p-2.5 rounded-xl border border-red-500 border-opacity-30 hover:bg-red-500/10 text-red-500 font-semibold text-sm cursor-pointer flex items-center justify-center gap-2 transition-all"
         >
           <IconLogout size={16} />
           Sign Out from this Device

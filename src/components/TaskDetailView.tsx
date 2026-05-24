@@ -17,14 +17,14 @@ import {
 } from '@tabler/icons-react';
 import type { SubTask } from '../types';
 import { store } from '../services/db';
-import { parseTask, formatTaskDate, formatTaskTime } from '../utils/taskHelper';
+import { parseTask, formatTaskDate, formatTaskTime, generateSecureNumericId } from '../utils/taskHelper';
 
 interface TaskDetailViewProps {
-  taskId: number;
-  lists: { id: number; name: string }[];
+  taskId: number | string;
+  lists: { id: number | string; name: string }[];
   onClose: () => void;
-  onDelete: (id: number) => void;
-  onToggleComplete: (id: number) => void;
+  onDelete: (id: number | string) => void;
+  onToggleComplete: (id: number | string) => void;
 }
 
 export default function TaskDetailView({
@@ -365,7 +365,7 @@ export default function TaskDetailView({
     if (!newSubtaskText.trim()) return;
 
     const newSub: SubTask = {
-      id: Date.now(),
+      id: generateSecureNumericId(),
       name: newSubtaskText.trim(),
       done: false,
     };
@@ -387,7 +387,7 @@ export default function TaskDetailView({
     );
   };
 
-  const handleToggleSubtask = (subId: number) => {
+  const handleToggleSubtask = (subId: number | string) => {
     const updatedSubs = subtasks.map((st) => {
       if (st.id === subId) {
         return { ...st, done: !st.done };
@@ -410,7 +410,7 @@ export default function TaskDetailView({
     );
   };
 
-  const handleSubtaskNameChange = (subId: number, newName: string) => {
+  const handleSubtaskNameChange = (subId: number | string, newName: string) => {
     const updatedSubs = subtasks.map((st) => {
       if (st.id === subId) {
         return { ...st, name: newName };
@@ -433,7 +433,7 @@ export default function TaskDetailView({
     );
   };
 
-  const handleDeleteSubtask = (subId: number) => {
+  const handleDeleteSubtask = (subId: number | string) => {
     const updatedSubs = subtasks.filter((st) => st.id !== subId);
     setSubtasks(updatedSubs);
     saveTaskDetails(

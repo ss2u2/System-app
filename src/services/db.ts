@@ -1,6 +1,7 @@
 // Local state store with automatic LocalStorage caching and daily reset behavior.
-import { triggerSync, registerStore } from './sync';
+import { triggerSync, registerStore, setLastSyncedState } from './sync';
 import type { AppState, AppStore } from '../types';
+import { generateSecureNumericId } from '../utils/taskHelper';
 
 
 const LOCAL_STORAGE_KEY = 'system_app_state';
@@ -96,13 +97,245 @@ function getPastDateString(daysAgo: number): string {
   return d.toDateString();
 }
 
+// Cryptographic helpers for securing LocalStorage
+function rc4(key: string, str: string): string {
+  const s: number[] = [];
+  for (let i = 0; i < 256; i++) {
+    s[i] = i;
+  }
+  let j = 0;
+  for (let i = 0; i < 256; i++) {
+    j = (j + s[i] + key.charCodeAt(i % key.length)) % 256;
+    const temp = s[i];
+    s[i] = s[j];
+    s[j] = temp;
+  }
+  let i = 0;
+  j = 0;
+  let res = '';
+  for (let y = 0; y < str.length; y++) {
+    i = (i + 1) % 256;
+    j = (j + s[i]) % 256;
+    const temp = s[i];
+    s[i] = s[j];
+    s[j] = temp;
+    const k = s[(s[i] + s[j]) % 256];
+    res += String.fromCharCode(str.charCodeAt(y) ^ k);
+  }
+  return res;
+}
+
+function getEncryptionKey(): string {
+  try {
+    const supabaseKey = 'sb-baoyolgpsfsczwffildv-auth-token';
+    const rawSession = localStorage.getItem(supabaseKey);
+    if (rawSession) {
+      const parsed = JSON.parse(rawSession);
+      if (parsed?.user?.id) {
+        return parsed.user.id;
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to retrieve user ID for encryption key:", e);
+  }
+  return 'system_app_default_fallback_key_2026';
+}
+
+function encryptState(stateStr: string, secretKey: string): string {
+  try {
+    const encrypted = rc4(secretKey, stateStr);
+    return btoa(unescape(encodeURIComponent(encrypted)));
+  } catch (e) {
+    console.error("Encryption failed:", e);
+    return stateStr;
+  }
+}
+
+function decryptState(cipherText: string, secretKey: string): string {
+  try {
+    const encrypted = decodeURIComponent(escape(atob(cipherText)));
+    return rc4(secretKey, encrypted);
+  } catch (e) {
+    console.error("Decryption failed:", e);
+    return cipherText;
+  }
+}
+
+function migrateUuidIds(s: AppState): AppState {
+  let migrated = false;
+  
+  // 1. Lists migration mapping
+  const listIdMap: Record<string | number, number> = {};
+  const migratedLists = (s.lists || []).map(list => {
+    const numericId = Number(list.id);
+    if (isNaN(numericId)) {
+      const newId = generateSecureNumericId();
+      listIdMap[list.id] = newId;
+      migrated = true;
+      return { ...list, id: newId };
+    }
+    return { ...list, id: numericId };
+  });
+
+  // 2. Sessions migration
+  const migratedSessions = (s.sessions || []).map(sess => {
+    const numericId = Number(sess.id);
+    if (isNaN(numericId)) {
+      migrated = true;
+      return { ...sess, id: generateSecureNumericId() };
+    }
+    return { ...sess, id: numericId };
+  });
+
+  // 3. Goals migration (weekly, monthly, static)
+  const migratedWeekly = (s.weekly || []).map(g => {
+    const numericId = Number(g.id);
+    if (isNaN(numericId)) {
+      migrated = true;
+      return { ...g, id: generateSecureNumericId() };
+    }
+    return { ...g, id: numericId };
+  });
+  const migratedMonthly = (s.monthly || []).map(g => {
+    const numericId = Number(g.id);
+    if (isNaN(numericId)) {
+      migrated = true;
+      return { ...g, id: generateSecureNumericId() };
+    }
+    return { ...g, id: numericId };
+  });
+  const migratedStatic = (s.static || []).map(g => {
+    const numericId = Number(g.id);
+    if (isNaN(numericId)) {
+      migrated = true;
+      return { ...g, id: generateSecureNumericId() };
+    }
+    return { ...g, id: numericId };
+  });
+
+  // 4. Journals migration
+  const migratedJournals = (s.journals || []).map(j => {
+    const numericId = Number(j.id);
+    if (isNaN(numericId)) {
+      migrated = true;
+      return { ...j, id: generateSecureNumericId() };
+    }
+    return { ...j, id: numericId };
+  });
+
+  // 5. Tasks migration
+  const migratedTasks = (s.tasks || []).map(task => {
+    let changed = false;
+    let newId = task.id;
+    let newListId = task.listId;
+    
+    // Check task id
+    const numericTaskId = Number(task.id);
+    if (isNaN(numericTaskId)) {
+      newId = generateSecureNumericId();
+      changed = true;
+      migrated = true;
+    } else {
+      newId = numericTaskId;
+    }
+
+    // Check listId
+    if (task.listId !== undefined && task.listId !== null && task.listId !== 'toady') {
+      if (listIdMap[task.listId]) {
+        newListId = listIdMap[task.listId];
+        changed = true;
+        migrated = true;
+      } else {
+        const numericListId = Number(task.listId);
+        if (isNaN(numericListId)) {
+          newListId = 'toady';
+          changed = true;
+          migrated = true;
+        } else {
+          newListId = numericListId;
+        }
+      }
+    }
+
+    // Check subtasks
+    const migratedSubtasks = task.subtasks || [];
+    const newSubtasks = migratedSubtasks.map(st => {
+      const numericStId = Number(st.id);
+      if (isNaN(numericStId)) {
+        migrated = true;
+        changed = true;
+        return { ...st, id: generateSecureNumericId() };
+      }
+      return { ...st, id: numericStId };
+    });
+
+    if (changed || typeof task.id !== 'number' || (task.listId !== undefined && task.listId !== null && typeof task.listId !== 'number' && task.listId !== 'toady')) {
+      return {
+        ...task,
+        id: newId,
+        listId: newListId,
+        subtasks: newSubtasks
+      };
+    }
+    return task;
+  });
+
+  // 6. Clean deletedIds of invalid string values to avoid DB cast failures on delete queries
+  let cleanDeleted = s.deletedIds;
+  if (s.deletedIds) {
+    cleanDeleted = {
+      tasks: (s.deletedIds.tasks || []).map(Number).filter(n => !isNaN(n)),
+      sessions: (s.deletedIds.sessions || []).map(Number).filter(n => !isNaN(n)),
+      goals: (s.deletedIds.goals || []).map(Number).filter(n => !isNaN(n)),
+      journals: (s.deletedIds.journals || []).map(Number).filter(n => !isNaN(n)),
+      lists: (s.deletedIds.lists || []).map(Number).filter(n => !isNaN(n))
+    };
+    if (JSON.stringify(s.deletedIds) !== JSON.stringify(cleanDeleted)) {
+      migrated = true;
+    }
+  }
+
+  if (migrated) {
+    console.log("Migrated legacy string UUIDs to secure numeric IDs for database sync compatibility.");
+    return {
+      ...s,
+      lists: migratedLists,
+      sessions: migratedSessions,
+      weekly: migratedWeekly,
+      monthly: migratedMonthly,
+      static: migratedStatic,
+      journals: migratedJournals,
+      tasks: migratedTasks,
+      deletedIds: cleanDeleted
+    };
+  }
+  return s;
+}
+
 // Loads state and handles daily checks
 function loadInitialState(): AppState {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return defaultState;
     
-    let parsed: AppState = JSON.parse(raw);
+    const key = getEncryptionKey();
+    let parsed: AppState;
+    
+    if (raw.trim().startsWith('{')) {
+      // Migrate legacy plaintext cache to encrypted
+      parsed = JSON.parse(raw);
+      parsed = migrateUuidIds(parsed);
+      localStorage.setItem(LOCAL_STORAGE_KEY, encryptState(JSON.stringify(parsed), key));
+    } else {
+      // Decrypt and parse
+      const decrypted = decryptState(raw, key);
+      parsed = JSON.parse(decrypted);
+      const migratedState = migrateUuidIds(parsed);
+      if (migratedState !== parsed) {
+        parsed = migratedState;
+        localStorage.setItem(LOCAL_STORAGE_KEY, encryptState(JSON.stringify(parsed), key));
+      }
+    }
     
     // Fallback for schema updates
     parsed.lists = parsed.lists || [
@@ -129,7 +362,6 @@ function loadInitialState(): AppState {
       };
       
       // 2. Adjust streak
-      // If they had a score > 0, they keep the streak. If score was 0, reset streak.
       if (score === 0) {
         parsed.streak = 0;
       } else {
@@ -146,8 +378,8 @@ function loadInitialState(): AppState {
       // Update date
       parsed.lastActiveDate = todayStr;
       
-      // Save updated state
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(parsed));
+      // Save updated state encrypted
+      localStorage.setItem(LOCAL_STORAGE_KEY, encryptState(JSON.stringify(parsed), key));
     }
     
     return parsed;
@@ -178,9 +410,10 @@ export const store: AppStore = {
       state = { ...state, ...newState } as AppState;
     }
     
-    // Save to local cache
+    // Save to local cache encrypted
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+      const key = getEncryptionKey();
+      localStorage.setItem(LOCAL_STORAGE_KEY, encryptState(JSON.stringify(state), key));
     } catch (e) {
       console.error("Failed to write state to localStorage:", e);
     }
@@ -189,14 +422,14 @@ export const store: AppStore = {
     listeners.forEach(l => l(state));
     
     // Trigger Supabase cloud synchronizer only if not from a remote update
-    // triggerSync reads the latest state from storeRef internally (no stale closure)
     if (!fromRemote) {
       triggerSync();
+    } else {
+      setLastSyncedState(state);
     }
   },
   subscribe(listener: StoreListener) {
     listeners.push(listener);
-    // Unsubscribe hook
     return () => {
       listeners = listeners.filter(l => l !== listener);
     };
