@@ -7,6 +7,7 @@ import { store } from '../services/db';
 import type { AppState, Task } from '../types';
 import AddTaskModal from '../components/AddTaskModal';
 import TasksContainer from '../components/TasksContainer';
+import FloatingActionButton from '../components/FloatingActionButton';
 import { parseTask, generateSecureNumericId } from '../utils/taskHelper';
 
 interface TasksViewProps {
@@ -115,9 +116,6 @@ export default function TasksView({
     onDeleteTask(taskId);
   };
 
-
-
-
   // Get active list name
   const activeListName = (() => {
     if (activeListId === 'starred') return 'Starred Tasks';
@@ -125,13 +123,9 @@ export default function TasksView({
     return list ? list.name : 'Tasks';
   })();
 
-
-
   return (
     <div className="tasks-view-container" style={{ paddingTop: '16px' }}>
-      {/* 1. Header with Title & Avatar has been removed since TopBar handles it now */}
-
-      {/* 2. Horizontally Scrollable List Tabs */}
+      {/* 1. Horizontally Scrollable List Tabs */}
       <div className="tasks-tabs-row">
         {/* Starred Tab */}
         <button
@@ -181,13 +175,11 @@ export default function TasksView({
       />
 
       {/* Bottom-Right Floating Action Button (FAB) */}
-      <button
-        className="tasks-fab"
+      <FloatingActionButton
         onClick={() => setIsNewTaskOpen(true)}
+        icon={IconPlus}
         title="Add Task"
-      >
-        <IconPlus size={24} />
-      </button>
+      />
 
       {/* Modal overlays */}
       {/* 1. Add List Modal */}

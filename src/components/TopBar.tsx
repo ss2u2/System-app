@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import { IconLogout, IconUser, IconSun, IconMoon } from '@tabler/icons-react';
+import { IconLogout, IconUser, IconSun, IconMoon, IconSearch, IconX } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 interface TopBarProps {
   onOpenSyncModal: () => void;
   activeTab?: string;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
 }
 
-export default function TopBar({ onOpenSyncModal, activeTab }: TopBarProps) {
+export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', onSearchChange }: TopBarProps) {
   const [dateStr, setDateStr] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, signOut, loadingData } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -36,6 +39,12 @@ export default function TopBar({ onOpenSyncModal, activeTab }: TopBarProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Reset search when activeTab changes
+  useEffect(() => {
+    setSearchActive(false);
+    onSearchChange?.('');
+  }, [activeTab]);
+
   // Build avatar initials from name or email
   const getInitials = () => {
     if (!user) return '?';
@@ -58,24 +67,104 @@ export default function TopBar({ onOpenSyncModal, activeTab }: TopBarProps) {
   return (
     <div className="topbar">
       <div className="content-wrapper" style={{ position: 'relative' }}>
-        <div className="topdate" style={{ fontSize: '14px', fontWeight: '500', opacity: activeTab === 'tasks' ? 0 : 1 }}>
-          {dateStr}
-        </div>
-
-        {/* Center Title for Tasks Tab */}
-        {activeTab === 'tasks' && (
-          <div style={{
-            position: 'absolute',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            fontSize: '16px',
-            fontWeight: '700',
-            color: 'var(--text)',
-            pointerEvents: 'none',
-            letterSpacing: '0.2px',
-          }}>
-            Tasks
+        {activeTab === 'journal' && searchActive ? (
+          <div style={{ display: 'flex', alignItems: 'center', flex: 1, marginRight: '12px' }}>
+            <button
+              onClick={() => {
+                setSearchActive(false);
+                onSearchChange?.('');
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text2)',
+                cursor: 'pointer',
+                marginRight: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '4px'
+              }}
+            >
+              <IconX size={18} />
+            </button>
+            <input
+              type="text"
+              placeholder="Search journals..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+              autoFocus
+              style={{
+                flex: 1,
+                background: 'var(--bg3)',
+                border: '1px solid var(--border)',
+                borderRadius: '20px',
+                padding: '6px 14px',
+                fontSize: '13px',
+                color: 'var(--text)',
+                outline: 'none',
+                fontFamily: 'inherit'
+              }}
+            />
           </div>
+        ) : (
+          <>
+            {activeTab === 'journal' ? (
+              <button
+                onClick={() => setSearchActive(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text2)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px',
+                  borderRadius: '50%',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg3)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <IconSearch size={18} />
+              </button>
+            ) : (
+              <div className="topdate" style={{ fontSize: '14px', fontWeight: '500', opacity: activeTab === 'tasks' ? 0 : 1 }}>
+                {dateStr}
+              </div>
+            )}
+
+            {/* Center Title for Tasks Tab */}
+            {activeTab === 'tasks' && (
+              <div style={{
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                fontSize: '16px',
+                fontWeight: '700',
+                color: 'var(--text)',
+                pointerEvents: 'none',
+                letterSpacing: '0.2px',
+              }}>
+                Tasks
+              </div>
+            )}
+
+            {/* Center Title for Journal Tab */}
+            {activeTab === 'journal' && (
+              <div style={{
+                position: 'absolute',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                fontSize: '16px',
+                fontWeight: '700',
+                color: 'var(--text)',
+                pointerEvents: 'none',
+                letterSpacing: '0.2px',
+              }}>
+                Pixel Journal
+              </div>
+            )}
+          </>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

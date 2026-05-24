@@ -59,6 +59,7 @@ function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState<string>('toady');
   const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
   const [editingTaskId, setEditingTaskId] = useState<number | string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
     const unsubscribe = store.subscribe((newState) => {
@@ -148,7 +149,12 @@ function AuthenticatedApp() {
   return (
     <AppContainer>
       {/* 1. Header Bar */}
-      <TopBar onOpenSyncModal={() => setIsSyncModalOpen(true)} activeTab={activeTab} />
+      <TopBar
+        onOpenSyncModal={() => setIsSyncModalOpen(true)}
+        activeTab={activeTab}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
 
       {/* 2. Scrollable Body Views */}
       <div className="app-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0, overflow: 'hidden' }}>
@@ -175,7 +181,7 @@ function AuthenticatedApp() {
         )}
 
         {activeTab === 'journal' && (
-          <JournalView state={state} />
+          <JournalView state={state} searchQuery={searchQuery} />
         )}
       </div>
 

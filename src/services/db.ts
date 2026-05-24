@@ -60,9 +60,51 @@ const defaultState: AppState = {
     {id: 4, name: 'Learn to play guitar', emoji: '🎸', note: 'Complete beginner course + 3 songs', cat: 'life', progress: 68}
   ],
   journals: [
-    {id: 1, title: 'My first entry', content: JSON.stringify([
-      { id: '1', type: 'text', content: 'Welcome to your journal! Type / to open the commands menu.', indent: 0 }
-    ])}
+    {
+      id: 20001,
+      title: 'Catching butterflies in the park',
+      content: JSON.stringify([
+        { id: 'b1', type: 'text', content: 'What a fantastic day! Prioritizing family time in nature is such a great way to relax. Keep capturing these moments.', indent: 0 }
+      ]),
+      bookmarked: true,
+      location: 'City Park Conservatory',
+      images: [
+        'https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=600&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=300&auto=format&fit=crop',
+        'https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=300&auto=format&fit=crop'
+      ],
+      created_at: new Date('2026-06-18T10:00:00.000Z').toISOString()
+    },
+    {
+      id: 20002,
+      title: 'Read Android Authority',
+      content: JSON.stringify([
+        { id: 'b2', type: 'text', content: 'Catching up on the latest tech news. Android 17 features look very promising, especially the revised widget system and theme engines.', indent: 0 }
+      ]),
+      bookmarked: true,
+      location: 'Home Library',
+      created_at: new Date('2026-03-17T15:30:00.000Z').toISOString()
+    },
+    {
+      id: 20003,
+      title: '',
+      content: JSON.stringify([
+        { id: 'b3', type: 'text', content: 'Drafting thoughts on my new project ideas. I need to define the database schema and layout mockups before coding.', indent: 0 }
+      ]),
+      bookmarked: false,
+      location: '',
+      created_at: new Date('2025-06-16T12:00:00.000Z').toISOString()
+    },
+    {
+      id: 20004,
+      title: 'Today is the day I have...',
+      content: JSON.stringify([
+        { id: 'b4', type: 'text', content: 'Had a great coffee and began designing the new database migration patterns. Feeling motivated today!', indent: 0 }
+      ]),
+      bookmarked: false,
+      location: 'Coffee Shop',
+      created_at: new Date('2026-03-17T09:15:00.000Z').toISOString()
+    }
   ],
   completionHistory: {
     // Populate some fake history for 14-day activity chart
@@ -215,12 +257,52 @@ function migrateUuidIds(s: AppState): AppState {
 
   // 4. Journals migration
   const migratedJournals = (s.journals || []).map(j => {
-    const numericId = Number(j.id);
-    if (isNaN(numericId)) {
-      migrated = true;
-      return { ...j, id: generateSecureNumericId() };
+    let content = j.content;
+    let contentChanged = false;
+    try {
+      let parsed = content;
+      while (typeof parsed === 'string') {
+        parsed = JSON.parse(parsed);
+      }
+      const stringified = JSON.stringify(parsed);
+      if (stringified !== content) {
+        content = stringified;
+        contentChanged = true;
+      }
+    } catch {
+      if (typeof content === 'string' && !content.trim().startsWith('[') && !content.trim().startsWith('{')) {
+        content = JSON.stringify([{ id: '1', type: 'text', content: content, indent: 0 }]);
+        contentChanged = true;
+      }
     }
-    return { ...j, id: numericId };
+
+    let images = j.images || [];
+    let imagesChanged = false;
+    if (typeof images === 'string') {
+      try {
+        images = JSON.parse(images);
+        imagesChanged = true;
+      } catch {
+        images = [];
+        imagesChanged = true;
+      }
+    }
+
+    const draft = j.draft || false;
+    const draftChanged = j.draft !== draft;
+
+    const numericId = Number(j.id);
+    if (isNaN(numericId) || contentChanged || imagesChanged || draftChanged) {
+      migrated = true;
+      return {
+        ...j,
+        id: isNaN(numericId) ? generateSecureNumericId() : numericId,
+        content,
+        images,
+        draft
+      };
+    }
+    return j;
   });
 
   // 5. Tasks migration

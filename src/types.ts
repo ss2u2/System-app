@@ -66,6 +66,11 @@ export interface JournalEntry {
   id: number | string;
   title: string;
   content: string; // JSON-stringified JournalBlock[]
+  bookmarked?: boolean;
+  location?: string;
+  images?: string[];
+  created_at?: string;
+  draft?: boolean;
 }
 
 export interface DeletedIds {

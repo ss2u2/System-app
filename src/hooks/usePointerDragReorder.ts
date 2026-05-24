@@ -114,21 +114,23 @@ export function usePointerDragReorder<T extends DragItem>({
     if (!callbacksRef.current.enabled) return;
     if (e.button !== 0) return; // Left click only
 
-    // Ignore interactive element clicks to prevent dragging when clicking inputs or buttons
+    const isTouch = e.pointerType === 'touch';
     const target = e.target as HTMLElement;
-    if (
+
+    const isNoDrag = target.closest('[data-nodrag]');
+    const isIgnored =
       target.closest('button') ||
       target.closest('.custom-task-checkbox') ||
       target.closest('.task-item-subtask-cb') ||
       target.closest('input') ||
       target.closest('textarea') ||
       target.closest('select') ||
-      target.closest('[data-nodrag]')
-    ) {
+      (isNoDrag && (!isTouch || !target.closest('.j-content')));
+
+    if (isIgnored) {
       return;
     }
 
-    const isTouch = e.pointerType === 'touch';
     if (!isTouch) {
       e.preventDefault();
     }

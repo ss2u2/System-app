@@ -14,10 +14,12 @@ import {
 } from '@tabler/icons-react';
 import type { JournalBlock } from '../types';
 import { generateUUID } from '../utils/taskHelper';
+import { usePointerDragReorder } from '../hooks/usePointerDragReorder';
 
 interface NotionEditorProps {
   initialContent: string;
-  onChange: (content: string) => void;
+  onChange?: (content: string) => void;
+  readOnly?: boolean;
 }
 
 interface SlashMenuState {
@@ -28,7 +30,7 @@ interface SlashMenuState {
   filter: string;
 }
 
-export default function NotionEditor({ initialContent, onChange }: NotionEditorProps) {
+export default function NotionEditor({ initialContent, onChange, readOnly }: NotionEditorProps) {
   const [blocks, setBlocks] = useState<JournalBlock[]>([]);
   const [slashMenu, setSlashMenu] = useState<SlashMenuState>({
     active: false,
@@ -38,29 +40,52 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
     filter: '',
   });
   const [slashSelectedIdx, setSlashSelectedIdx] = useState(0);
-  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const [dragPosition, setDragPosition] = useState<'top' | 'bottom' | null>(null);
   const refs = useRef<Record<string, HTMLDivElement | null>>({});
+  
+  // Track if we are currently typing to avoid resetting content and losing cursor
+  const isInternalUpdate = useRef(false);
 
-  // Parse initial content
+  // Parse initial content - only if it's not an internal update
   useEffect(() => {
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false;
+      return;
+    }
+
     try {
-      const parsed = JSON.parse(initialContent);
+      let parsed = initialContent;
+      if (typeof initialContent === 'string') {
+        parsed = JSON.parse(initialContent);
+      }
+      
       if (Array.isArray(parsed) && parsed.length > 0) {
         setBlocks(parsed);
       } else {
         setBlocks([{ id: '1', type: 'text', content: '', indent: 0 }]);
       }
-    } catch (e) {
+    } catch (err) {
+      console.error('Failed to parse initial content:', err, 'Raw content:', initialContent);
       setBlocks([{ id: '1', type: 'text', content: '', indent: 0 }]);
     }
   }, [initialContent]);
 
+  // Sync blocks contents directly into DOM element innerText after render
+  useEffect(() => {
+    blocks.forEach((block) => {
+      const el = refs.current[block.id];
+      if (el && el.innerText !== block.content) {
+        el.innerText = block.content;
+      }
+    });
+  }, [blocks]);
+
   // Sync back to parent
   const updateBlocks = (newBlocks: JournalBlock[]) => {
     setBlocks(newBlocks);
-    onChange(JSON.stringify(newBlocks));
+    if (onChange) {
+      isInternalUpdate.current = true;
+      onChange(JSON.stringify(newBlocks));
+    }
   };
 
   const getHeadingBlocks = () => {
@@ -69,22 +94,24 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
     );
   };
 
-  const handleContentChange = (index: number, html: string) => {
+  const handleContentChange = (index: number, text: string) => {
+    if (readOnly) return;
     const updated = [...blocks];
-    updated[index].content = html;
+    updated[index].content = text;
     updateBlocks(updated);
 
     // Handle slash menu activation
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
-      const text = selection.anchorNode?.textContent || '';
+      const textNode = selection.anchorNode;
       const offset = selection.anchorOffset;
-      const beforeCursor = text.slice(0, offset);
+      const fullText = textNode?.textContent || '';
+      const beforeCursor = fullText.slice(0, offset);
 
       const slashIndex = beforeCursor.lastIndexOf('/');
       if (slashIndex !== -1 && (slashIndex === 0 || beforeCursor[slashIndex - 1] === ' ')) {
         const query = beforeCursor.slice(slashIndex + 1);
-        const parentElement = selection.anchorNode?.parentElement;
+        const parentElement = textNode?.parentElement;
         if (parentElement) {
           const rect = parentElement.getBoundingClientRect();
           setSlashMenu({
@@ -103,7 +130,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
   };
 
   const executeCommand = (type: string) => {
-    if (slashMenu.blockIndex === null) return;
+    if (readOnly || slashMenu.blockIndex === null) return;
     const idx = slashMenu.blockIndex;
     const updated = [...blocks];
 
@@ -122,12 +149,16 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
     }
 
     setSlashMenu({ active: false, x: 0, y: 0, blockIndex: null, filter: '' });
+    
+    // For command execution, we want the DOM to update since we changed type
+    isInternalUpdate.current = false; 
     updateBlocks(updated);
 
     // Re-focus the editor node
     setTimeout(() => {
       const el = refs.current[updated[idx].id];
       if (el) {
+        el.innerText = text; // Ensure text is correct in DOM
         el.focus();
         // Move caret to end
         const range = document.createRange();
@@ -143,6 +174,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, index: number) => {
+    if (readOnly) return;
     const block = blocks[index];
 
     // Slash Menu Controls
@@ -197,6 +229,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
 
       const updated = [...blocks];
       updated.splice(index + 1, 0, newBlock);
+      isInternalUpdate.current = false;
       updateBlocks(updated);
 
       setTimeout(() => {
@@ -218,6 +251,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
       if (blocks.length > 1 && index > 0) {
         const prevBlock = blocks[index - 1];
         const updated = blocks.filter((_, i) => i !== index);
+        isInternalUpdate.current = false;
         updateBlocks(updated);
 
         setTimeout(() => {
@@ -269,12 +303,14 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
   };
 
   const toggleTodoDone = (index: number) => {
+    if (readOnly) return;
     const updated = [...blocks];
     updated[index].done = !updated[index].done;
     updateBlocks(updated);
   };
 
   const addNewBlockFloat = (index: number) => {
+    if (readOnly) return;
     const newId = generateUUID();
     const newBlock: JournalBlock = {
       id: newId,
@@ -284,49 +320,33 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
     };
     const updated = [...blocks];
     updated.splice(index + 1, 0, newBlock);
+    isInternalUpdate.current = false;
     updateBlocks(updated);
     setTimeout(() => refs.current[newId]?.focus(), 50);
   };
 
-  // Drag and Drop
-  const handleDragStart = (index: number, e: React.DragEvent) => {
-    setDraggedIdx(index);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (index: number, e: React.DragEvent) => {
-    e.preventDefault();
-    if (draggedIdx === null || draggedIdx === index) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mid = rect.top + rect.height / 2;
-    const position = e.clientY < mid ? 'top' : 'bottom';
-
-    setDragOverIdx(index);
-    setDragPosition(position);
-  };
-
-  const handleDrop = (_index: number) => {
-    if (draggedIdx === null || dragOverIdx === null) return;
-
-    const updated = [...blocks];
-    const item = updated.splice(draggedIdx, 1)[0];
-
-    let insertIdx = dragOverIdx;
-    if (dragPosition === 'bottom') {
-      insertIdx += 1;
+  // Swap block indices and update state
+  const handleReorder = (dragId: string | number, targetId: string | number) => {
+    const dragIdx = blocks.findIndex((b) => String(b.id) === String(dragId));
+    const targetIdx = blocks.findIndex((b) => String(b.id) === String(targetId));
+    if (dragIdx !== -1 && targetIdx !== -1) {
+      const updated = [...blocks];
+      const [dragged] = updated.splice(dragIdx, 1);
+      updated.splice(targetIdx, 0, dragged);
+      isInternalUpdate.current = false; // We want DOM to sync because block index orders swapped
+      updateBlocks(updated);
     }
-    if (draggedIdx < insertIdx) {
-      insertIdx -= 1;
-    }
-
-    updated.splice(insertIdx, 0, item);
-    updateBlocks(updated);
-
-    setDraggedIdx(null);
-    setDragOverIdx(null);
-    setDragPosition(null);
   };
+
+  const {
+    draggedId,
+    getItemStyle,
+    getItemProps,
+  } = usePointerDragReorder({
+    items: blocks,
+    onReorder: handleReorder,
+    enabled: !readOnly,
+  });
 
   // Filter menu items
   const menuItems = [
@@ -394,46 +414,46 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
       {blocks.map((block, idx) => {
         if (!shouldRenderBlock(idx)) return null;
 
-        const isDragOver = idx === dragOverIdx;
-        const isCurrentDrag = idx === draggedIdx;
-        const borderCls = isDragOver
-          ? dragPosition === 'top'
-            ? 'drag-over-top'
-            : 'drag-over-bottom'
-          : '';
+        const isCurrentDrag = block.id === draggedId;
+        const dragStyle = getItemStyle(block.id, idx);
+        
+        // Remove the default grab cursor from the block wrapper to keep text cursor editability
+        if (dragStyle.cursor === 'grab') {
+          delete dragStyle.cursor;
+        }
+
+        const combinedStyle: React.CSSProperties = {
+          ...dragStyle,
+          paddingLeft: `${(block.indent || 0) * 24}px`,
+        };
 
         return (
           <div
             key={block.id}
-            className={`j-block group ${borderCls} ${isCurrentDrag ? 'dragging' : ''} ${
+            className={`j-block group ${isCurrentDrag ? 'dragging-active' : ''} ${
               block.done ? 'done' : ''
             }`}
             data-type={block.type}
-            style={{ paddingLeft: `${(block.indent || 0) * 24}px` }}
-            onDragOver={(e) => handleDragOver(idx, e)}
-            onDrop={() => handleDrop(idx)}
+            style={combinedStyle}
+            {...getItemProps(block.id, idx)}
           >
             {/* Drag Handle & Hover Plus controls */}
-            <div className="j-floating-controls">
-              <div className="j-ctrl-btn cursor-pointer" onClick={() => addNewBlockFloat(idx)}>
-                <IconPlus size={14} />
+            {!readOnly && (
+              <div className="j-floating-controls">
+                <div className="j-ctrl-btn cursor-pointer" data-nodrag onClick={() => addNewBlockFloat(idx)}>
+                  <IconPlus size={14} />
+                </div>
+                <div
+                  className="j-ctrl-btn j-drag-handle cursor-grab"
+                >
+                  <IconGripVertical size={14} />
+                </div>
               </div>
-              <div
-                className="j-ctrl-btn j-drag-handle cursor-grab"
-                draggable
-                onDragStart={(e) => handleDragStart(idx, e)}
-                onDragEnd={() => {
-                  setDraggedIdx(null);
-                  setDragOverIdx(null);
-                }}
-              >
-                <IconGripVertical size={14} />
-              </div>
-            </div>
+            )}
 
             {/* Block Type Custom Decorators */}
             {block.type === 'todo' && (
-              <div className="j-todo-cb" onClick={() => toggleTodoDone(idx)}>
+              <div className="j-todo-cb" data-nodrag onClick={() => toggleTodoDone(idx)}>
                 {block.done && (
                   <IconCheck
                     size={10}
@@ -447,6 +467,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
             {block.type.startsWith('toggle-') && (
               <div
                 className={`j-toggle-btn ${!block.collapsed ? 'open' : ''}`}
+                data-nodrag
                 onClick={() => handleToggleCollapse(idx)}
               >
                 <IconCaretRightFilled size={10} />
@@ -454,7 +475,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
             )}
 
             {block.type === 'bullet' && (
-              <div className="mr-2 text-[var(--text3)] text-lg leading-tight select-none">•</div>
+              <div className="mr-2 text-[var(--text3)] text-lg leading-tight select-none" data-nodrag>•</div>
             )}
 
             {/* Content Editable Area */}
@@ -463,18 +484,19 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
                 ref={(el) => {
                   refs.current[block.id] = el;
                 }}
-                className="j-content focus:outline-none"
-                contentEditable
+                className={`j-content ${!readOnly ? 'focus:outline-none' : ''}`}
+                contentEditable={!readOnly}
                 suppressContentEditableWarning
-                data-placeholder="Type '/' for commands"
+                data-placeholder={!readOnly ? "Type '/' for commands" : ""}
+                data-nodrag
                 onKeyDown={(e) => handleKeyDown(e, idx)}
                 onInput={(e) => handleContentChange(idx, e.currentTarget.innerText)}
-                onBlur={() => updateBlocks([...blocks])}
+                onBlur={() => !readOnly && updateBlocks([...blocks])}
               >
-                {block.content}
+                {/* Content is managed via innerText in useEffect and handleContentChange */}
               </div>
             ) : (
-              <div className="j-block" data-type="toc" style={{ width: '100%' }}>
+              <div className="j-block" data-type="toc" data-nodrag style={{ width: '100%' }}>
                 <div className="j-toc-title">Table of Contents</div>
                 <div className="j-toc-inner">
                   {getHeadingBlocks().length > 0 ? (
@@ -515,7 +537,7 @@ export default function NotionEditor({ initialContent, onChange }: NotionEditorP
       })}
 
       {/* Hovering Slash command menu */}
-      {slashMenu.active && (
+      {!readOnly && slashMenu.active && (
         <div
           className="slash-menu active"
           style={{

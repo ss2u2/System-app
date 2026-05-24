@@ -146,7 +146,14 @@ export function triggerSync(): void {
       const journalsToUpsert = currJournals.filter(j => {
         const prev = prevJournals.find(p => String(p.id) === String(j.id));
         if (!prev) return true;
-        return prev.title !== j.title || prev.content !== j.content;
+        return (
+          prev.title !== j.title ||
+          prev.content !== j.content ||
+          prev.bookmarked !== j.bookmarked ||
+          prev.location !== j.location ||
+          prev.draft !== j.draft ||
+          JSON.stringify(prev.images) !== JSON.stringify(j.images)
+        );
       });
       const journalsToDelete = state.deletedIds?.journals || [];
 
@@ -277,7 +284,28 @@ export function triggerSync(): void {
 
       // 5. Sync journals
       if (journalsToUpsert.length > 0) {
-        const payloads = journalsToUpsert.map(j => ({ id: j.id, user_id: userId, title: j.title || '', content: j.content }));
+        const payloads = journalsToUpsert.map(j => {
+          let parsedContent = [];
+          try {
+            parsedContent = typeof j.content === 'string' ? JSON.parse(j.content) : j.content;
+            while (typeof parsedContent === 'string') {
+              parsedContent = JSON.parse(parsedContent);
+            }
+          } catch (e) {
+            console.error("Failed to parse journal content for sync:", e);
+            parsedContent = [{ id: '1', type: 'text', content: j.content || '', indent: 0 }];
+          }
+          return {
+            id: j.id,
+            user_id: userId,
+            title: j.title || '',
+            content: parsedContent,
+            bookmarked: j.bookmarked || false,
+            location: j.location || null,
+            images: Array.isArray(j.images) ? j.images : [],
+            draft: j.draft || false
+          };
+        });
         const { error } = await client.from('journals').upsert(payloads, { onConflict: 'id' });
         if (error) console.error('Supabase upsert error [journals]:', error.message);
         hasSynced = true;
@@ -444,7 +472,46 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
       newState.static = goalsData.filter((g: any) => g.type === 'static').map((g: any) => ({ id: Number(g.id), name: g.name, emoji: g.emoji, note: g.note, cat: g.cat, progress: g.progress }));
     }
     if (journalsData) {
-      newState.journals = journalsData.map((j: any) => ({ id: Number(j.id), title: j.title, content: j.content }));
+      newState.journals = journalsData.map((j: any) => {
+        let contentStr = '[]';
+        if (j.content) {
+          if (typeof j.content === 'string') {
+            try {
+              let parsed = JSON.parse(j.content);
+              while (typeof parsed === 'string') {
+                parsed = JSON.parse(parsed);
+              }
+              contentStr = JSON.stringify(parsed);
+            } catch {
+              contentStr = j.content;
+            }
+          } else {
+            contentStr = JSON.stringify(j.content);
+          }
+        }
+
+        let imagesArr: string[] = [];
+        if (j.images) {
+          if (Array.isArray(j.images)) {
+            imagesArr = j.images;
+          } else if (typeof j.images === 'string') {
+            try {
+              imagesArr = JSON.parse(j.images);
+            } catch {}
+          }
+        }
+
+        return {
+          id: Number(j.id),
+          title: j.title || '',
+          content: contentStr,
+          bookmarked: j.bookmarked || false,
+          location: j.location || '',
+          images: imagesArr,
+          created_at: j.created_at,
+          draft: j.draft || false
+        };
+      });
     }
     if (profileData) {
       newState.streak = profileData.streak;
