@@ -124,7 +124,7 @@ export default function TasksView({
   })();
 
   return (
-    <div className="tasks-view-container" style={{ paddingTop: '16px' }}>
+    <div className="tasks-view-container">
       {/* 1. Horizontally Scrollable List Tabs */}
       <div className="tasks-tabs-row">
         {/* Starred Tab */}

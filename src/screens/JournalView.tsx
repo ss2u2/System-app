@@ -592,10 +592,10 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
               placeholder="Untitled Journal Entry"
               value={activeEntry.title}
               onChange={(e) => updateActiveEntry({ title: e.target.value })}
-              style={{ marginBottom: '24px', fontSize: '32px', width: '100%' }}
+              style={{ width: '100%' }}
             />
           ) : (
-            <h1 className="journal-title" style={{ marginBottom: '24px', fontSize: '32px', width: '100%' }}>
+            <h1 className="journal-title" style={{ width: '100%' }}>
               {activeEntry.title || 'Untitled Journal Entry'}
             </h1>
           )}
