@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useOutletContext, useNavigate } from 'react-router-dom';
 import {
   IconStarFilled,
@@ -33,6 +33,21 @@ export default function TasksView() {
   const [activeListId, setActiveListId] = useState<string | number>(1001); // default to 'My Tasks' list
   const [slideDirection, setSlideDirection] = useState<'right-to-left' | 'left-to-right' | ''>('');
 
+  const tabsRowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (tabsRowRef.current) {
+      const activeButton = tabsRowRef.current.querySelector('.tasks-tab-item.active');
+      if (activeButton) {
+        activeButton.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'center',
+        });
+      }
+    }
+  }, [activeListId]);
+
   const handleSwitchList = (newId: string | number) => {
     const getListIndex = (id: string | number) => {
       if (id === 'starred') return 0;
@@ -56,6 +71,8 @@ export default function TasksView() {
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [listToDelete, setListToDelete] = useState<number | string | null>(null);
+  const [listToRename, setListToRename] = useState<number | string | null>(null);
+  const [renameListName, setRenameListName] = useState('');
 
   // Relational lists and tasks
   const allLists = state.lists && state.lists.length > 0 ? state.lists : [{ id: 1001, name: 'My Tasks' }];
@@ -86,6 +103,30 @@ export default function TasksView() {
 
   const handleDeleteList = (listId: number | string) => {
     setListToDelete(listId);
+  };
+
+  const handleOpenRenameModal = (listId: number | string) => {
+    const list = allLists.find(l => String(l.id) === String(listId));
+    if (list) {
+      setListToRename(listId);
+      setRenameListName(list.name);
+    }
+  };
+
+  const handleRenameListSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (listToRename === null || !renameListName.trim()) return;
+    
+    const updatedLists = (state.lists || []).map(l => {
+      if (String(l.id) === String(listToRename)) {
+        return { ...l, name: renameListName.trim() };
+      }
+      return l;
+    });
+    
+    store.setState({ lists: updatedLists });
+    setListToRename(null);
+    setRenameListName('');
   };
 
   const confirmDeleteList = () => {
@@ -166,7 +207,7 @@ export default function TasksView() {
   return (
     <div className="tasks-view-container">
       {/* 1. Horizontally Scrollable List Tabs */}
-      <div className="tasks-tabs-row">
+      <div className="tasks-tabs-row" ref={tabsRowRef}>
         {/* Starred Tab */}
         <button
           className={`tasks-tab-item star-tab ${activeListId === 'starred' ? 'active' : ''}`}
@@ -211,6 +252,7 @@ export default function TasksView() {
         handleToggleStar={handleToggleStar}
         handleDeleteTask={handleDeleteTask}
         handleDeleteList={handleDeleteList}
+        onRenameList={handleOpenRenameModal}
         onEditTask={handleEditTask}
         onSwitchList={handleSwitchList}
         slideDirection={slideDirection}
@@ -270,6 +312,36 @@ export default function TasksView() {
         title="Are you sure you want to delete this list and all its tasks?"
         confirmLabel="Delete"
       />
+
+      {/* 3. Rename List Modal */}
+      <Modal
+        isOpen={listToRename !== null}
+        onClose={() => setListToRename(null)}
+        title="Rename List"
+      >
+        <form onSubmit={handleRenameListSubmit}>
+          <FormField label="List Name" htmlFor="rename-list-name-input">
+            <input
+              id="rename-list-name-input"
+              type="text"
+              placeholder="e.g. Shopping, Errands"
+              value={renameListName}
+              onChange={(e) => setRenameListName(e.target.value)}
+              className="ui-input"
+              autoFocus
+              required
+            />
+          </FormField>
+          <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <Button type="button" onClick={() => setListToRename(null)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" style={{ flex: 1 }}>
+              Save
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

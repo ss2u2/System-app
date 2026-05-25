@@ -19,26 +19,49 @@ export default function SwipableAction({
   disabled = false,
 }: SwipableActionProps) {
   const [swipeX, setSwipeX] = useState(0);
-  const touchStartRef = useRef<number | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
   const isSwipingRef = useRef(false);
+  const isScrollingRef = useRef(false);
 
   const onTouchStart = (e: React.TouchEvent) => {
     if (disabled) return;
-    touchStartRef.current = e.touches[0].clientX;
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
     isSwipingRef.current = false;
+    isScrollingRef.current = false;
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
-    if (touchStartRef.current === null) return;
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    if (isScrollingRef.current) return;
+
     const currentX = e.touches[0].clientX;
-    const diff = currentX - touchStartRef.current;
+    const currentY = e.touches[0].clientY;
     
-    // Only allow swiping left (negative diff)
-    if (diff < 0) {
-      if (Math.abs(diff) > 10) {
-        isSwipingRef.current = true;
+    const diffX = currentX - touchStartXRef.current;
+    const diffY = currentY - touchStartYRef.current;
+
+    // Detect gesture direction if not yet established
+    if (!isSwipingRef.current && !isScrollingRef.current) {
+      const absX = Math.abs(diffX);
+      const absY = Math.abs(diffY);
+      
+      if (absX > 8 || absY > 8) {
+        if (absY > absX) {
+          isScrollingRef.current = true;
+          return;
+        } else {
+          isSwipingRef.current = true;
+        }
+      } else {
+        return;
       }
-      setSwipeX(diff);
+    }
+
+    // Only allow swiping left (negative diffX)
+    if (isSwipingRef.current && diffX < 0) {
+      setSwipeX(diffX);
     }
   };
 
@@ -48,7 +71,8 @@ export default function SwipableAction({
     }
     
     setSwipeX(0);
-    touchStartRef.current = null;
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
     
     if (isSwipingRef.current) {
       e.stopPropagation();
@@ -56,6 +80,7 @@ export default function SwipableAction({
     
     setTimeout(() => {
       isSwipingRef.current = false;
+      isScrollingRef.current = false;
     }, 50);
   };
 

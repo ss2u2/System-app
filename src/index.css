@@ -2338,12 +2338,14 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  z-index: 100;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
   display: none;
   align-items: center;
   justify-content: center;
   padding: 20px;
+  transition: opacity 0.25s ease;
 }
 
 .modal-overlay.open {
@@ -2406,7 +2408,9 @@ body {
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  border-color: var(--accent);
+  border-color: var(--border2);
+  background: var(--bg2);
+  box-shadow: 0 0 0 3px var(--bg4);
 }
 
 .form-field textarea {
@@ -2706,7 +2710,9 @@ body {
 .ui-input:focus,
 .ui-select:focus,
 .ui-textarea:focus {
-  border-color: var(--accent);
+  border-color: var(--border2);
+  background: var(--bg2);
+  box-shadow: 0 0 0 3px var(--bg4);
 }
 
 .ui-textarea {
@@ -3821,7 +3827,9 @@ body.modal-open .journal-container {
 
 .calendar-option-content input:focus,
 .calendar-option-content select:focus {
-  border-color: var(--accent);
+  border-color: var(--border2);
+  background: var(--bg2);
+  box-shadow: 0 0 0 3px var(--bg4);
 }
 
 /* Actions footer */

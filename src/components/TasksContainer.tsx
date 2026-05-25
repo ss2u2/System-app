@@ -6,6 +6,7 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconCheck,
+  IconPencil,
 } from '@tabler/icons-react';
 import type { AppState, Task } from '../types';
 import TaskItem from './TaskItem';
@@ -21,6 +22,7 @@ interface TasksContainerProps {
   handleToggleStar: (taskId: number | string, e: React.MouseEvent) => void;
   handleDeleteTask: (taskId: number | string, e: React.MouseEvent) => void;
   handleDeleteList: (listId: number | string) => void;
+  onRenameList: (listId: number | string) => void;
   onEditTask: (id: number | string) => void;
   onSwitchList?: (newId: string | number) => void;
   slideDirection?: 'right-to-left' | 'left-to-right' | '';
@@ -34,6 +36,7 @@ export default function TasksContainer({
   handleToggleStar,
   handleDeleteTask,
   handleDeleteList,
+  onRenameList,
   onEditTask,
   onSwitchList,
   slideDirection = '',
@@ -386,23 +389,39 @@ export default function TasksContainer({
             </div>
 
             {/* List Action Menu */}
-            {activeListId !== 'starred' && activeListId !== 1001 && (
+            {activeListId !== 'starred' && (
               <div style={{ position: 'relative' }} ref={menuRef}>
                 <button
                   onClick={() => setMenuOpenListId(prev => prev === activeListId ? null : activeListId)}
                   className="tasks-action-btn"
+                  title="List options"
                 >
                   <IconDotsVertical size={18} />
                 </button>
                 {menuOpenListId === activeListId && (
                   <div className="tasks-dropdown-menu">
                     <button
-                      onClick={() => handleDeleteList(activeListId)}
-                      className="dropdown-item danger"
+                      onClick={() => {
+                        setMenuOpenListId(null);
+                        onRenameList(activeListId);
+                      }}
+                      className="dropdown-item"
                     >
-                      <IconTrash size={14} />
-                      Delete List
+                      <IconPencil size={14} />
+                      Rename List
                     </button>
+                    {activeListId !== 1001 && (
+                      <button
+                        onClick={() => {
+                          setMenuOpenListId(null);
+                          handleDeleteList(activeListId);
+                        }}
+                        className="dropdown-item danger"
+                      >
+                        <IconTrash size={14} />
+                        Delete List
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
