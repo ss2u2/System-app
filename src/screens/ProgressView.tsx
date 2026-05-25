@@ -1,12 +1,10 @@
 import { type ReactNode } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { IconFlag } from '@tabler/icons-react';
 import type { AppState } from '../types';
 
-interface ProgressViewProps {
-  state: AppState;
-}
-
-export default function ProgressView({ state }: ProgressViewProps) {
+export default function ProgressView() {
+  const { state } = useOutletContext<{ state: AppState }>();
   // Calculate today's details
   const getTodayStats = () => {
     const all = [

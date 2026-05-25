@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import {
   IconStarFilled,
   IconPlus,
@@ -9,20 +10,25 @@ import AddTaskModal from '../components/AddTaskModal';
 import TasksContainer from '../components/TasksContainer';
 import FloatingActionButton from '../components/FloatingActionButton';
 import { parseTask, generateSecureNumericId } from '../utils/taskHelper';
+// Import UI Design System components
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import FormField from '../components/ui/FormField';
 
-interface TasksViewProps {
-  state: AppState;
-  onEditTask: (id: number | string) => void;
-  onToggleTask: (id: number | string) => void;
-  onDeleteTask: (id: number | string) => void;
-}
+export default function TasksView() {
+  const navigate = useNavigate();
 
-export default function TasksView({
-  state,
-  onEditTask,
-  onToggleTask,
-  onDeleteTask,
-}: TasksViewProps) {
+  // Retrieve shared state and handlers from Outlet Context
+  const {
+    state,
+    handleGlobalToggleTask,
+    handleGlobalDeleteTask,
+  } = useOutletContext<{
+    state: AppState;
+    handleGlobalToggleTask: (id: number | string) => void;
+    handleGlobalDeleteTask: (id: number | string) => void;
+  }>();
+
   const [activeListId, setActiveListId] = useState<string | number>(1001); // default to 'My Tasks' list
   // Modals state
   const [isNewListOpen, setIsNewListOpen] = useState(false);
@@ -113,7 +119,11 @@ export default function TasksView({
 
   const handleDeleteTask = (taskId: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
-    onDeleteTask(taskId);
+    handleGlobalDeleteTask(taskId);
+  };
+
+  const handleEditTask = (taskId: number | string) => {
+    navigate(`/tasks/detail/${taskId}`);
   };
 
   // Get active list name
@@ -167,11 +177,11 @@ export default function TasksView({
         state={state}
         activeListId={activeListId}
         activeListName={activeListName}
-        handleToggleTask={onToggleTask}
+        handleToggleTask={handleGlobalToggleTask}
         handleToggleStar={handleToggleStar}
         handleDeleteTask={handleDeleteTask}
         handleDeleteList={handleDeleteList}
-        onEditTask={onEditTask}
+        onEditTask={handleEditTask}
       />
 
       {/* Bottom-Right Floating Action Button (FAB) */}
@@ -183,42 +193,34 @@ export default function TasksView({
 
       {/* Modal overlays */}
       {/* 1. Add List Modal */}
-      {isNewListOpen && (
-        <div
-          className="modal-overlay open"
-          onClick={(e) => e.target === e.currentTarget && setIsNewListOpen(false)}
-        >
-          <div className="modal">
-            <div className="modal-title">Create New List</div>
-            <form onSubmit={handleCreateList}>
-              <div className="form-field">
-                <label htmlFor="list-name-input">List Name</label>
-                <input
-                  id="list-name-input"
-                  type="text"
-                  placeholder="e.g. Shopping, Errands"
-                  value={newListName}
-                  onChange={(e) => setNewListName(e.target.value)}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={() => setIsNewListOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-save">
-                  Create
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={isNewListOpen}
+        onClose={() => setIsNewListOpen(false)}
+        title="Create New List"
+      >
+        <form onSubmit={handleCreateList}>
+          <FormField label="List Name" htmlFor="list-name-input">
+            <input
+              id="list-name-input"
+              type="text"
+              placeholder="e.g. Shopping, Errands"
+              value={newListName}
+              onChange={(e) => setNewListName(e.target.value)}
+              className="ui-input"
+              autoFocus
+              required
+            />
+          </FormField>
+          <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <Button type="button" onClick={() => setIsNewListOpen(false)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" style={{ flex: 1 }}>
+              Create
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* 2. Add Task Modal */}
       <AddTaskModal

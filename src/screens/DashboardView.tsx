@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useOutletContext, useNavigate } from 'react-router-dom';
 import {
   IconSun,
   IconLayersIntersect,
@@ -18,21 +19,27 @@ import type { AppState, Task, Session, WeeklyGoal, MonthlyGoal, StaticGoal } fro
 import TaskItem from '../components/TaskItem';
 import AddTaskModal from '../components/AddTaskModal';
 import { generateSecureNumericId } from '../utils/taskHelper';
+// Import UI Design System components
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import Card from '../components/ui/Card';
+import FormField from '../components/ui/FormField';
 
-interface ToadyViewProps {
-  state: AppState;
-  onEditTask: (id: number | string) => void;
-  onToggleTask: (id: number | string) => void;
-  onDeleteTask: (id: number | string) => void;
-}
-
-export default function ToadyView({
-  state,
-  onEditTask,
-  onToggleTask,
-  onDeleteTask,
-}: ToadyViewProps) {
+export default function DashboardView() {
   type ModalType = 'task' | 'session' | 'goal' | 'static' | null;
+  const navigate = useNavigate();
+
+  // Retrieve shared state and handlers from Outlet Context
+  const {
+    state,
+    handleGlobalToggleTask,
+    handleGlobalDeleteTask,
+  } = useOutletContext<{
+    state: AppState;
+    handleGlobalToggleTask: (id: number | string) => void;
+    handleGlobalDeleteTask: (id: number | string) => void;
+  }>();
+
   const [subTab, setSubTab] = useState<'today' | 'sessions' | 'weekly' | 'monthly' | 'static'>('today');
 
   // Modals state
@@ -67,19 +74,19 @@ export default function ToadyView({
     pink: '#2a0a2e',
   };
 
-  // Filter tasks that belong to Toady (not part of lists)
-  const getToadyTasks = () => {
+  // Filter tasks that belong to Today dashboard (no listId or listId is 'toady')
+  const getTodayTasks = () => {
     return (state.tasks || []).filter(
       (t) => !t.listId || t.listId === 'toady'
     );
   };
 
-  // Calculate score
+  // Calculate today score
   const calculateTodayScore = () => {
-    const toadyTasks = getToadyTasks();
+    const todayTasks = getTodayTasks();
     const all = [
       ...(state.sessions || []).flatMap((s) => s.steps || []),
-      ...toadyTasks,
+      ...todayTasks,
     ];
     const done = all.filter((x) => x.done).length;
     return all.length ? Math.round((done / all.length) * 100) : 0;
@@ -118,7 +125,7 @@ export default function ToadyView({
   const handleDeleteTask = (taskId: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (window.confirm('Delete this task?')) {
-      onDeleteTask(taskId);
+      handleGlobalDeleteTask(taskId);
     }
   };
 
@@ -238,6 +245,10 @@ export default function ToadyView({
     setActiveModal(null);
   };
 
+  const handleEditTask = (taskId: number | string) => {
+    navigate(`/detail/${taskId}`);
+  };
+
   return (
     <div className="main-view active">
       {/* Sub Tabs */}
@@ -245,7 +256,6 @@ export default function ToadyView({
         <button
           className={`sub-tab ${subTab === 'today' ? 'active' : ''}`}
           onClick={() => setSubTab('today')}
-          style={{ background: 'none', border: 'none', font: 'inherit' }}
         >
           <IconSun size={14} />
           Today
@@ -253,7 +263,6 @@ export default function ToadyView({
         <button
           className={`sub-tab ${subTab === 'sessions' ? 'active' : ''}`}
           onClick={() => setSubTab('sessions')}
-          style={{ background: 'none', border: 'none', font: 'inherit' }}
         >
           <IconLayersIntersect size={14} />
           Sessions
@@ -261,7 +270,6 @@ export default function ToadyView({
         <button
           className={`sub-tab ${subTab === 'weekly' ? 'active' : ''}`}
           onClick={() => setSubTab('weekly')}
-          style={{ background: 'none', border: 'none', font: 'inherit' }}
         >
           <IconCalendarWeek size={14} />
           Weekly
@@ -269,7 +277,6 @@ export default function ToadyView({
         <button
           className={`sub-tab ${subTab === 'monthly' ? 'active' : ''}`}
           onClick={() => setSubTab('monthly')}
-          style={{ background: 'none', border: 'none', font: 'inherit' }}
         >
           <IconCalendarMonth size={14} />
           Monthly
@@ -277,7 +284,6 @@ export default function ToadyView({
         <button
           className={`sub-tab ${subTab === 'static' ? 'active' : ''}`}
           onClick={() => setSubTab('static')}
-          style={{ background: 'none', border: 'none', font: 'inherit' }}
         >
           <IconFlag size={14} />
           Life Goals
@@ -301,14 +307,15 @@ export default function ToadyView({
             {/* Sessions Section */}
             <div className="sec-hdr">
               <span className="sec-title">Sessions</span>
-              <button
-                className="add-btn"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setSubTab('sessions')}
-                style={{ background: 'none', border: 'none', font: 'inherit' }}
+                className="add-btn"
               >
                 <IconArrowRight size={13} />
                 Manage
-              </button>
+              </Button>
             </div>
 
             <div id="today-sessions">
@@ -324,7 +331,11 @@ export default function ToadyView({
                   const offset = circ - (pct / 100) * circ;
 
                   return (
-                    <div key={s.id} className={`session-card ${s.open ? 'open' : ''}`}>
+                    <Card
+                      key={s.id}
+                      padding={false}
+                      className={`session-card ${s.open ? 'open' : ''}`}
+                    >
                       <div className="session-head" onClick={() => toggleTodaySession(si)}>
                         <div className="session-icon" style={{ background: cbg, color: c }}>
                           {s.icon}
@@ -377,7 +388,7 @@ export default function ToadyView({
                           ))}
                         </div>
                       </div>
-                    </div>
+                    </Card>
                   );
                 })
               ) : (
@@ -393,22 +404,22 @@ export default function ToadyView({
             {/* Tasks Section */}
             <div className="sec-hdr">
               <span className="sec-title">Tasks</span>
-              <button className="add-btn" onClick={() => setActiveModal('task')}>
+              <Button onClick={() => setActiveModal('task')} className="add-btn" size="sm">
                 <IconPlus size={13} />
                 Add Task
-              </button>
+              </Button>
             </div>
 
             <div className="tasks-list">
-              {getToadyTasks().length > 0 ? (
-                getToadyTasks().map((t) => (
+              {getTodayTasks().length > 0 ? (
+                getTodayTasks().map((t) => (
                   <TaskItem
                     key={t.id}
                     task={t}
-                    onToggle={onToggleTask}
+                    onToggle={handleGlobalToggleTask}
                     onToggleStar={handleToggleStar}
                     onDelete={handleDeleteTask}
-                    onEdit={onEditTask}
+                    onEdit={handleEditTask}
                   />
                 ))
               ) : (
@@ -426,10 +437,10 @@ export default function ToadyView({
           <div className="view active">
             <div className="sec-hdr">
               <span className="sec-title">Your Sessions</span>
-              <button className="add-btn" onClick={() => setActiveModal('session')}>
+              <Button onClick={() => setActiveModal('session')} className="add-btn" size="sm">
                 <IconPlus size={13} />
                 New Session
-              </button>
+              </Button>
             </div>
 
             <div id="sessions-manager" className="space-y-4">
@@ -439,7 +450,7 @@ export default function ToadyView({
                   const cbg = colorBgMap[s.color] || colorBgMap.accent;
 
                   return (
-                    <div key={s.id} className="sm-card">
+                    <Card key={s.id} padding={false} className="sm-card">
                       <div className="sm-head">
                         <div className="sm-icon" style={{ background: cbg, color: c }}>
                           {s.icon}
@@ -449,12 +460,14 @@ export default function ToadyView({
                           <div className="sm-sub">{s.steps.length} steps</div>
                         </div>
                         <div className="sm-actions">
-                          <button
-                            className="sm-btn danger cursor-pointer"
+                          <Button
+                            variant="danger"
+                            size="sm"
                             onClick={() => handleDeleteSession(si)}
+                            style={{ padding: '8px', minWidth: 'auto', borderRadius: '50%' }}
                           >
                             <IconTrash size={14} />
-                          </button>
+                          </Button>
                         </div>
                       </div>
                       <div className="sm-steps-preview">
@@ -468,7 +481,7 @@ export default function ToadyView({
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </Card>
                   );
                 })
               ) : (
@@ -486,16 +499,17 @@ export default function ToadyView({
           <div className="view active">
             <div className="sec-hdr">
               <span className="sec-title">Weekly Goals</span>
-              <button
-                className="add-btn"
+              <Button
                 onClick={() => {
                   setGoalType('weekly');
                   setActiveModal('goal');
                 }}
+                className="add-btn"
+                size="sm"
               >
                 <IconPlus size={13} />
                 Add Goal
-              </button>
+              </Button>
             </div>
 
             <div className="goals-list">
@@ -507,7 +521,7 @@ export default function ToadyView({
                   const slbl = pct >= 80 ? 'On track' : pct >= 40 ? 'In progress' : 'Needs work';
 
                   return (
-                    <div key={g.id} className="goal-item">
+                    <Card key={g.id} className="goal-item">
                       <div className="goal-top">
                         <div className="goal-name">{g.name}</div>
                         <span className={`goal-status ${scls}`}>{slbl}</span>
@@ -520,7 +534,7 @@ export default function ToadyView({
                           {g.current}/{g.target} · {pct}%
                         </span>
                       </div>
-                    </div>
+                    </Card>
                   );
                 })
               ) : (
@@ -538,16 +552,17 @@ export default function ToadyView({
           <div className="view active">
             <div className="sec-hdr">
               <span className="sec-title">Monthly Goals</span>
-              <button
-                className="add-btn"
+              <Button
                 onClick={() => {
                   setGoalType('monthly');
                   setActiveModal('goal');
                 }}
+                className="add-btn"
+                size="sm"
               >
                 <IconPlus size={13} />
                 Add Goal
-              </button>
+              </Button>
             </div>
 
             <div className="goals-list">
@@ -559,7 +574,7 @@ export default function ToadyView({
                   const slbl = pct >= 80 ? 'On track' : pct >= 40 ? 'In progress' : 'Needs work';
 
                   return (
-                    <div key={g.id} className="goal-item">
+                    <Card key={g.id} className="goal-item">
                       <div className="goal-top">
                         <div className="goal-name">{g.name}</div>
                         <span className={`goal-status ${scls}`}>{slbl}</span>
@@ -572,7 +587,7 @@ export default function ToadyView({
                           {g.current}/{g.target} · {pct}%
                         </span>
                       </div>
-                    </div>
+                    </Card>
                   );
                 })
               ) : (
@@ -590,10 +605,10 @@ export default function ToadyView({
           <div className="view active">
             <div className="sec-hdr">
               <span className="sec-title">Life Goals</span>
-              <button className="add-btn" onClick={() => setActiveModal('static')}>
+              <Button onClick={() => setActiveModal('static')} className="add-btn" size="sm">
                 <IconPlus size={13} />
                 Add Goal
-              </button>
+              </Button>
             </div>
 
             <div className="static-list">
@@ -603,7 +618,7 @@ export default function ToadyView({
                   const fillCls = pct >= 70 ? 'fill-green' : pct >= 35 ? 'fill-amber' : 'fill-red';
 
                   return (
-                    <div key={g.id} className="static-card">
+                    <Card key={g.id} hoverable className="static-card">
                       <div className="static-top">
                         <div className="static-emoji">{g.emoji}</div>
                         <div className="static-info">
@@ -622,7 +637,7 @@ export default function ToadyView({
                         </div>
                         <span className="static-pct">{pct}%</span>
                       </div>
-                      <div className="static-edit-row">
+                      <div className="static-edit-row" style={{ marginTop: '12px' }}>
                         <label htmlFor={`range-goal-${g.id}`}>Progress</label>
                         <input
                           id={`range-goal-${g.id}`}
@@ -636,7 +651,7 @@ export default function ToadyView({
                         />
                         <span>{pct}%</span>
                       </div>
-                    </div>
+                    </Card>
                   );
                 })
               ) : (
@@ -659,189 +674,173 @@ export default function ToadyView({
       />
 
       {/* ==================== ADD SESSION MODAL ==================== */}
-      {activeModal === 'session' && (
-        <div
-          className="modal-overlay open"
-          onClick={(e) => e.target === e.currentTarget && setActiveModal(null)}
-        >
-          <div className="modal">
-            <div className="modal-title">New Session</div>
-            <form onSubmit={saveSession}>
-              <div className="form-field">
-                <label htmlFor="modal-session-name">Session name</label>
-                <input
-                  id="modal-session-name"
-                  type="text"
-                  placeholder="e.g. Morning Exercise"
-                  value={sessionName}
-                  onChange={(e) => setSessionName(e.target.value)}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-session-icon">Emoji icon</label>
-                <input
-                  id="modal-session-icon"
-                  type="text"
-                  placeholder="🏋️"
-                  maxLength={2}
-                  value={sessionIcon}
-                  onChange={(e) => setSessionIcon(e.target.value)}
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-session-color">Color theme</label>
-                <select
-                  id="modal-session-color"
-                  value={sessionColor}
-                  onChange={(e) => setSessionColor(e.target.value)}
-                >
-                  <option value="accent">Purple</option>
-                  <option value="green">Green</option>
-                  <option value="amber">Amber</option>
-                  <option value="blue">Blue</option>
-                  <option value="pink">Pink</option>
-                </select>
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-session-steps">
-                  Steps — one per line: Name | duration (e.g. Stretch | 5 min)
-                </label>
-                <textarea
-                  id="modal-session-steps"
-                  placeholder={'Stretch | 5 min\nDeep work | 45 min\nMeditation | 10 min'}
-                  value={sessionSteps}
-                  onChange={(e) => setSessionSteps(e.target.value)}
-                  required
-                ></textarea>
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setActiveModal(null)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-save">
-                  Create Session
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={activeModal === 'session'}
+        onClose={() => setActiveModal(null)}
+        title="New Session"
+      >
+        <form onSubmit={saveSession}>
+          <FormField label="Session name" htmlFor="modal-session-name">
+            <input
+              id="modal-session-name"
+              type="text"
+              placeholder="e.g. Morning Exercise"
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
+              className="ui-input"
+              autoFocus
+              required
+            />
+          </FormField>
+          <FormField label="Emoji icon" htmlFor="modal-session-icon">
+            <input
+              id="modal-session-icon"
+              type="text"
+              placeholder="🏋️"
+              maxLength={2}
+              value={sessionIcon}
+              onChange={(e) => setSessionIcon(e.target.value)}
+              className="ui-input"
+            />
+          </FormField>
+          <FormField label="Color theme" htmlFor="modal-session-color">
+            <select
+              id="modal-session-color"
+              value={sessionColor}
+              onChange={(e) => setSessionColor(e.target.value)}
+              className="ui-select"
+            >
+              <option value="accent">Purple</option>
+              <option value="green">Green</option>
+              <option value="amber">Amber</option>
+              <option value="blue">Blue</option>
+              <option value="pink">Pink</option>
+            </select>
+          </FormField>
+          <FormField label="Steps — one per line: Name | duration (e.g. Stretch | 5 min)" htmlFor="modal-session-steps">
+            <textarea
+              id="modal-session-steps"
+              placeholder={'Stretch | 5 min\nDeep work | 45 min\nMeditation | 10 min'}
+              value={sessionSteps}
+              onChange={(e) => setSessionSteps(e.target.value)}
+              className="ui-textarea"
+              required
+            ></textarea>
+          </FormField>
+          <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <Button type="button" onClick={() => setActiveModal(null)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" style={{ flex: 1 }}>
+              Create Session
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* ==================== ADD GOAL MODAL ==================== */}
-      {activeModal === 'goal' && (
-        <div
-          className="modal-overlay open"
-          onClick={(e) => e.target === e.currentTarget && setActiveModal(null)}
-        >
-          <div className="modal">
-            <div className="modal-title">
-              Add {goalType === 'weekly' ? 'Weekly' : 'Monthly'} Goal
-            </div>
-            <form onSubmit={saveGoal}>
-              <div className="form-field">
-                <label htmlFor="modal-goal-name">Goal description</label>
-                <input
-                  id="modal-goal-name"
-                  type="text"
-                  placeholder="e.g. Exercise 5 times this week"
-                  value={goalName}
-                  onChange={(e) => setGoalName(e.target.value)}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-goal-target">Target (number)</label>
-                <input
-                  id="modal-goal-target"
-                  type="number"
-                  placeholder="5"
-                  min="1"
-                  value={goalTarget}
-                  onChange={(e) => setGoalTarget(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-goal-current">Current progress</label>
-                <input
-                  id="modal-goal-current"
-                  type="number"
-                  placeholder="0"
-                  min="0"
-                  value={goalCurrent}
-                  onChange={(e) => setGoalCurrent(e.target.value)}
-                />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setActiveModal(null)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-save">
-                  Save Goal
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={activeModal === 'goal'}
+        onClose={() => setActiveModal(null)}
+        title={`Add ${goalType === 'weekly' ? 'Weekly' : 'Monthly'} Goal`}
+      >
+        <form onSubmit={saveGoal}>
+          <FormField label="Goal description" htmlFor="modal-goal-name">
+            <input
+              id="modal-goal-name"
+              type="text"
+              placeholder="e.g. Exercise 5 times this week"
+              value={goalName}
+              onChange={(e) => setGoalName(e.target.value)}
+              className="ui-input"
+              autoFocus
+              required
+            />
+          </FormField>
+          <FormField label="Target (number)" htmlFor="modal-goal-target">
+            <input
+              id="modal-goal-target"
+              type="number"
+              placeholder="5"
+              min="1"
+              value={goalTarget}
+              onChange={(e) => setGoalTarget(e.target.value)}
+              className="ui-input"
+              required
+            />
+          </FormField>
+          <FormField label="Current progress" htmlFor="modal-goal-current">
+            <input
+              id="modal-goal-current"
+              type="number"
+              placeholder="0"
+              min="0"
+              value={goalCurrent}
+              onChange={(e) => setGoalCurrent(e.target.value)}
+              className="ui-input"
+            />
+          </FormField>
+          <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <Button type="button" onClick={() => setActiveModal(null)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" style={{ flex: 1 }}>
+              Save Goal
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* ==================== ADD LIFE GOAL MODAL ==================== */}
-      {activeModal === 'static' && (
-        <div
-          className="modal-overlay open"
-          onClick={(e) => e.target === e.currentTarget && setActiveModal(null)}
-        >
-          <div className="modal">
-            <div className="modal-title">Add Life Goal</div>
-            <form onSubmit={saveStaticGoal}>
-              <div className="form-field">
-                <label htmlFor="modal-life-name">Goal</label>
-                <input
-                  id="modal-life-name"
-                  type="text"
-                  placeholder="e.g. Buy a car, Get in shape"
-                  value={lifeGoalName}
-                  onChange={(e) => setLifeGoalName(e.target.value)}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-life-emoji">Emoji</label>
-                <input
-                  id="modal-life-emoji"
-                  type="text"
-                  placeholder="🚗"
-                  maxLength={2}
-                  value={lifeGoalEmoji}
-                  onChange={(e) => setLifeGoalEmoji(e.target.value)}
-                />
-              </div>
-              <div className="form-field">
-                <label htmlFor="modal-life-note">Note (optional)</label>
-                <input
-                  id="modal-life-note"
-                  type="text"
-                  placeholder="e.g. Save ₹3L, target by Dec 2025"
-                  value={lifeGoalNote}
-                  onChange={(e) => setLifeGoalNote(e.target.value)}
-                />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setActiveModal(null)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-save">
-                  Add Goal
-                </button>
-              </div>
-            </form>
+      <Modal
+        isOpen={activeModal === 'static'}
+        onClose={() => setActiveModal(null)}
+        title="Add Life Goal"
+      >
+        <form onSubmit={saveStaticGoal}>
+          <FormField label="Goal title" htmlFor="modal-life-goal-name">
+            <input
+              id="modal-life-goal-name"
+              type="text"
+              placeholder="e.g. Learn to play piano"
+              value={lifeGoalName}
+              onChange={(e) => setLifeGoalName(e.target.value)}
+              className="ui-input"
+              autoFocus
+              required
+            />
+          </FormField>
+          <FormField label="Emoji icon" htmlFor="modal-life-goal-emoji">
+            <input
+              id="modal-life-goal-emoji"
+              type="text"
+              placeholder="🎯"
+              maxLength={2}
+              value={lifeGoalEmoji}
+              onChange={(e) => setLifeGoalEmoji(e.target.value)}
+              className="ui-input"
+            />
+          </FormField>
+          <FormField label="Notes" htmlFor="modal-life-goal-notes">
+            <input
+              id="modal-life-goal-notes"
+              type="text"
+              placeholder="Target: Complete basic exercises"
+              value={lifeGoalNote}
+              onChange={(e) => setLifeGoalNote(e.target.value)}
+              className="ui-input"
+            />
+          </FormField>
+          <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+            <Button type="button" onClick={() => setActiveModal(null)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" style={{ flex: 1 }}>
+              Save Goal
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

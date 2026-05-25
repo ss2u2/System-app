@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   IconX,
   IconBook,
-  IconBookmark,
-  IconBookmarkFilled,
   IconMapPin,
   IconPencil,
   IconPhoto,
@@ -16,23 +15,28 @@ import FloatingActionButton from '../components/FloatingActionButton';
 import { store } from '../services/db';
 import type { AppState, JournalEntry } from '../types';
 import { generateSecureNumericId } from '../utils/taskHelper';
+// Import UI Design System components
+import Button from '../components/ui/Button';
+import Dropdown, { DropdownItem } from '../components/ui/Dropdown';
+import Card from '../components/ui/Card';
+import BookmarkToggle from '../components/ui/BookmarkToggle';
 
-interface JournalViewProps {
-  state: AppState;
-  searchQuery?: string;
-}
+export default function JournalView() {
+  const { entryId } = useParams();
+  const navigate = useNavigate();
 
-export default function JournalView({ state, searchQuery = '' }: JournalViewProps) {
-  const [activeEntryId, setActiveEntryId] = useState<number | string | null>(null);
+  // Retrieve shared state and search query from Outlet Context
+  const { state, searchQuery } = useOutletContext<{ state: AppState; searchQuery: string }>();
+
   const [isEditing, setIsEditing] = useState(false);
-  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const activeEntry = state.journals.find((j) => j.id === activeEntryId);
+  const activeEntry = state.journals.find((j) => String(j.id) === String(entryId));
 
+  // Auto-focus/auto-resize editor text area
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -40,10 +44,24 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
     }
   }, [activeEntry?.title, isEditing]);
 
+  // Set edit mode automatically for drafts or new entries
+  useEffect(() => {
+    if (activeEntry) {
+      if (activeEntry.draft || isEntryEmpty(activeEntry)) {
+        setIsEditing(true);
+      } else {
+        setIsEditing(false);
+      }
+    } else {
+      setIsEditing(false);
+    }
+    setShowImageInput(false);
+  }, [entryId]);
+
   // General updater helper for active journal entry
   const updateActiveEntry = (fields: Partial<JournalEntry>) => {
     const updated = state.journals.map((j) => {
-      if (j.id === activeEntryId) {
+      if (String(j.id) === String(entryId)) {
         return { ...j, ...fields };
       }
       return j;
@@ -64,21 +82,18 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
       draft: true
     };
     store.setState({ journals: [...state.journals, newEntry] });
-    setActiveEntryId(newId);
-    setIsEditing(true);
+    navigate(`/journal/${newId}`);
   };
 
   const handleDeleteEntry = (id: number | string) => {
     if (window.confirm('Are you sure you want to delete this journal entry?')) {
-      const updated = state.journals.filter((j) => j.id !== id);
+      const updated = state.journals.filter((j) => String(j.id) !== String(id));
       const deletedIds = {
         ...(state.deletedIds || {}),
         journals: [...(state.deletedIds?.journals || []), id],
       };
       store.setState({ journals: updated, deletedIds });
-      setActiveEntryId(null);
-      setIsEditing(false);
-      setShowDeleteMenu(false);
+      navigate('/journal');
     }
   };
 
@@ -100,15 +115,13 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
     if (activeEntry) {
       if (isEntryEmpty(activeEntry)) {
         // Remove empty entry completely
-        const updated = state.journals.filter((j) => j.id !== activeEntry.id);
+        const updated = state.journals.filter((j) => String(j.id) !== String(activeEntry.id));
         store.setState({ journals: updated });
       } else if (!activeEntry.title || activeEntry.title.trim() === '') {
         updateActiveEntry({ draft: true });
       }
     }
-    setActiveEntryId(null);
-    setIsEditing(false);
-    setShowDeleteMenu(false);
+    navigate('/journal');
   };
 
   const handleAddImage = (e: React.FormEvent) => {
@@ -139,7 +152,6 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
       year: 'numeric'
     });
   };
-
 
   // Filter journals based on global TopBar search input
   const filteredJournals = (state.journals || []).filter((j) => {
@@ -176,7 +188,7 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
   const handleToggleBookmark = (id: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updated = state.journals.map((j) => {
-      if (j.id === id) {
+      if (String(j.id) === String(id)) {
         return { ...j, bookmarked: !j.bookmarked };
       }
       return j;
@@ -185,8 +197,7 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
   };
 
   const handleOpenEntry = (id: number | string) => {
-    setActiveEntryId(id);
-    setIsEditing(false);
+    navigate(`/journal/${id}`);
   };
 
   return (
@@ -210,7 +221,7 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
                   <div>
                     <div className="journal-section-title">Drafts</div>
                     {drafts.map((d) => (
-                      <div key={d.id} className="journal-card-row" onClick={() => handleOpenEntry(d.id)}>
+                      <Card key={d.id} padding={false} hoverable className="journal-card-row" onClick={() => handleOpenEntry(d.id)}>
                         <div className="journal-card-left-icon" style={{ background: 'var(--bg3)', color: 'var(--text3)' }}>
                           <IconPhoto size={18} />
                         </div>
@@ -222,13 +233,11 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
                             {d.location || 'Add location'}
                           </span>
                         </div>
-                        <button
-                          className={`journal-bookmark-btn ${d.bookmarked ? 'active' : ''}`}
-                          onClick={(e) => handleToggleBookmark(d.id, e)}
-                        >
-                          {d.bookmarked ? <IconBookmarkFilled size={16} /> : <IconBookmark size={16} />}
-                        </button>
-                      </div>
+                        <BookmarkToggle
+                          checked={d.bookmarked || false}
+                          onToggle={(e) => handleToggleBookmark(d.id, e)}
+                        />
+                      </Card>
                     ))}
                   </div>
                 )}
@@ -238,7 +247,7 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
                   <div>
                     <div className="journal-section-title">Bookmarks</div>
                     {bookmarkedEntries.map((b) => (
-                      <div key={b.id} className="journal-card-row" onClick={() => handleOpenEntry(b.id)}>
+                      <Card key={b.id} padding={false} hoverable className="journal-card-row" onClick={() => handleOpenEntry(b.id)}>
                         {b.images && b.images[0] ? (
                           <img src={b.images[0]} alt="thumbnail" className="journal-card-left-img" />
                         ) : (
@@ -256,13 +265,11 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
                             </span>
                           )}
                         </div>
-                        <button
-                          className="journal-bookmark-btn active"
-                          onClick={(e) => handleToggleBookmark(b.id, e)}
-                        >
-                          <IconBookmarkFilled size={16} />
-                        </button>
-                      </div>
+                        <BookmarkToggle
+                          checked={true}
+                          onToggle={(e) => handleToggleBookmark(b.id, e)}
+                        />
+                      </Card>
                     ))}
                   </div>
                 )}
@@ -272,7 +279,7 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
                   <div>
                     <div className="journal-section-title">Entries</div>
                     {allEntries.map((j) => (
-                      <div key={j.id} className="journal-card-row" onClick={() => handleOpenEntry(j.id)}>
+                      <Card key={j.id} padding={false} hoverable className="journal-card-row" onClick={() => handleOpenEntry(j.id)}>
                         {j.images && j.images[0] ? (
                           <img src={j.images[0]} alt="thumbnail" className="journal-card-left-img" />
                         ) : (
@@ -290,13 +297,11 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
                             </span>
                           )}
                         </div>
-                        <button
-                          className={`journal-bookmark-btn ${j.bookmarked ? 'active' : ''}`}
-                          onClick={(e) => handleToggleBookmark(j.id, e)}
-                        >
-                          {j.bookmarked ? <IconBookmarkFilled size={16} /> : <IconBookmark size={16} />}
-                        </button>
-                      </div>
+                        <BookmarkToggle
+                          checked={j.bookmarked || false}
+                          onToggle={(e) => handleToggleBookmark(j.id, e)}
+                        />
+                      </Card>
                     ))}
                   </div>
                 )}
@@ -328,28 +333,27 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
         >
           {/* Header Controls */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', width: '100%' }}>
-            <button
-              className="add-btn cursor-pointer"
+            <Button
               onClick={handleClose}
+              variant="secondary"
               style={{ 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                border: 'none', 
                 padding: '8px', 
                 borderRadius: '50%',
                 width: '40px',
                 height: '40px',
-                background: 'var(--bg3)'
+                minWidth: 'auto',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
               <IconX size={20} />
-            </button>
+            </Button>
 
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               {isEditing && (
-                <button
-                  className="btn-save"
+                <Button
+                  variant="primary"
                   onClick={() => {
                     updateActiveEntry({ draft: false });
                     setIsEditing(false);
@@ -360,93 +364,50 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
                     fontSize: '13px', 
                     fontWeight: '700',
                     height: '36px',
-                    display: 'flex',
-                    alignItems: 'center'
+                    minWidth: 'auto',
                   }}
                 >
                   Save
-                </button>
+                </Button>
               )}
 
-              <button
-                className={`add-btn cursor-pointer ${activeEntry.bookmarked ? 'active' : ''}`}
-                onClick={() => updateActiveEntry({ bookmarked: !activeEntry.bookmarked })}
+              <BookmarkToggle
+                checked={activeEntry.bookmarked || false}
+                onToggle={() => updateActiveEntry({ bookmarked: !activeEntry.bookmarked })}
+                size={20}
+                className="add-btn"
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  border: 'none',
-                  padding: '8px',
-                  borderRadius: '50%',
                   width: '40px',
                   height: '40px',
-                  justifyContent: 'center',
                   background: 'var(--bg3)',
-                  color: activeEntry.bookmarked ? 'var(--accent)' : 'var(--text2)'
                 }}
-              >
-                {activeEntry.bookmarked ? (
-                  <IconBookmarkFilled size={20} style={{ color: 'var(--accent)' }} />
-                ) : (
-                  <IconBookmark size={20} />
-                )}
-              </button>
+              />
 
-              <div style={{ position: 'relative' }}>
-                <button
-                  className="add-btn cursor-pointer"
-                  onClick={() => setShowDeleteMenu(!showDeleteMenu)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    border: 'none',
-                    padding: '8px',
-                    borderRadius: '50%',
-                    width: '40px',
-                    height: '40px',
-                    justifyContent: 'center',
-                    background: 'var(--bg3)'
-                  }}
-                >
-                  <IconDotsVertical size={20} />
-                </button>
-
-                {showDeleteMenu && (
-                  <div
+              <Dropdown
+                align="right"
+                trigger={
+                  <Button
+                    variant="secondary"
                     style={{
-                      position: 'absolute',
-                      top: '100%',
-                      right: 0,
-                      marginTop: '8px',
-                      background: 'var(--bg2)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '8px',
-                      boxShadow: 'var(--shadow)',
-                      zIndex: 100
+                      padding: '8px',
+                      borderRadius: '50%',
+                      width: '40px',
+                      height: '40px',
+                      minWidth: 'auto',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                     }}
                   >
-                    <button
-                      onClick={() => handleDeleteEntry(activeEntry.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '10px 16px',
-                        color: 'var(--red)',
-                        background: 'none',
-                        border: 'none',
-                        width: '100%',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      <IconTrash size={16} />
-                      Delete Entry
-                    </button>
-                  </div>
-                )}
-              </div>
+                    <IconDotsVertical size={20} />
+                  </Button>
+                }
+              >
+                <DropdownItem variant="danger" onClick={() => handleDeleteEntry(activeEntry.id)}>
+                  <IconTrash size={16} />
+                  Delete Entry
+                </DropdownItem>
+              </Dropdown>
             </div>
           </div>
 
@@ -533,21 +494,18 @@ export default function JournalView({ state, searchQuery = '' }: JournalViewProp
                         outline: 'none'
                       }}
                     />
-                    <button
+                    <Button
                       type="submit"
+                      variant="primary"
                       style={{
-                        background: 'var(--text)',
-                        color: 'var(--bg2)',
-                        border: 'none',
-                        borderRadius: '4px',
                         padding: '4px 8px',
                         fontSize: '11px',
                         fontWeight: '700',
-                        cursor: 'pointer'
+                        minWidth: 'auto',
                       }}
                     >
                       Add
-                    </button>
+                    </Button>
                   </form>
                 )}
               </div>

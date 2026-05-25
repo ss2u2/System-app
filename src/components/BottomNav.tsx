@@ -7,7 +7,7 @@ interface BottomNavProps {
 
 export default function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
   const tabs = [
-    { id: 'toady', label: 'Toady', icon: IconTarget },
+    { id: 'toady', label: 'Dashboard', icon: IconTarget },
     { id: 'tasks', label: 'Tasks', icon: IconClipboardList },
     { id: 'report', label: 'Progress', icon: IconChartBar },
     { id: 'journal', label: 'Journal', icon: IconBook },

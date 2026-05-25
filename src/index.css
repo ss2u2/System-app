@@ -3284,4 +3284,156 @@ body {
 .editor-meta-input::placeholder {
   color: var(--text3);
 }
+
+/* ==================== DESIGN SYSTEM COMPONENTS ==================== */
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  border: none;
+  font-family: inherit;
+  user-select: none;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+}
+
+.ui-button-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+
+.ui-button-primary:hover {
+  filter: brightness(1.1);
+}
+
+.ui-button-secondary {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+
+.ui-button-secondary:hover {
+  background: var(--bg4);
+  color: var(--text);
+  border-color: var(--border2);
+}
+
+.ui-button-danger {
+  background: var(--red-bg);
+  border: 1px solid var(--red);
+  color: var(--red);
+}
+
+.ui-button-danger:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.ui-button-ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text2);
+}
+
+.ui-button-ghost:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+.ui-button-icon {
+  background: none;
+  border: none;
+  color: var(--text3);
+  padding: 6px;
+  border-radius: 50%;
+  aspect-ratio: 1;
+}
+
+.ui-button-icon:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+
+.ui-button-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.ui-button-md {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.ui-button-lg {
+  padding: 10px 20px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ui-button-fullwidth {
+  width: 100%;
+}
+
+.ui-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Card styling */
+.ui-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.ui-card-padded {
+  padding: 20px;
+}
+
+.ui-card-hoverable:hover {
+  border-color: var(--border2);
+}
+
+.ui-card-clickable {
+  cursor: pointer;
+}
+
+/* Form System Inputs */
+.ui-input,
+.ui-select,
+.ui-textarea {
+  width: 100%;
+  padding: 8px 11px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border 0.15s;
+  font-family: inherit;
+}
+
+.ui-input:focus,
+.ui-select:focus,
+.ui-textarea:focus {
+  border-color: var(--accent);
+}
+
+.ui-textarea {
+  height: 80px;
+  resize: none;
+}
 
