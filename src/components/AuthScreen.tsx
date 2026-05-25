@@ -117,8 +117,22 @@ function PasswordInput({ value, onChange, placeholder, autoComplete, id }: Passw
   );
 }
 
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+
 /* ─── main component ────────────────────────────────────────── */
 export default function AuthScreen() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    console.log('AuthScreen: user state changed:', user);
+    if (user) {
+      console.log('AuthScreen: navigating to "/" because user is truthy');
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
+
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -170,10 +184,13 @@ export default function AuthScreen() {
     if (!supabase) return setError('Supabase is not configured.');
     clearMsgs();
     setLoading(true);
+    console.log('AuthScreen: starting signInWithPassword for:', email);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log('AuthScreen: signInWithPassword result:', { data, error });
       if (error) throw error;
     } catch (err: any) {
+      console.error('AuthScreen: signInWithPassword error:', err);
       setError(err.message);
     } finally {
       setLoading(false);

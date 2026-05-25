@@ -76,15 +76,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Subscribe to future auth changes (login, logout, token refresh)
     try {
       const authListener = supabase.auth.onAuthStateChange(
-        async (event, session) => {
+        (event, session) => {
           if (!isMounted) return;
           
+          console.log('AuthContext: onAuthStateChange event:', event, 'user:', session?.user?.email);
           setSession(session);
           setUser(session?.user ?? null);
 
           if (event === 'SIGNED_IN' && session?.user) {
-            await loadUserData();
-            setupRealtimeSubscription(session.user.id);
+            console.log('AuthContext: SIGNED_IN event, scheduling non-blocking data load and realtime setup...');
+            const userId = session.user.id;
+            setTimeout(() => {
+              if (!isMounted) return;
+              loadUserData().then(() => {
+                if (isMounted) {
+                  console.log('AuthContext: Background data load complete, setting up realtime subscription...');
+                  setupRealtimeSubscription(userId);
+                }
+              }).catch(err => {
+                console.error('AuthContext: Background data load failed:', err);
+              });
+            }, 0);
           }
 
           if (event === 'SIGNED_OUT') {
