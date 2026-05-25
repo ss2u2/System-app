@@ -3181,9 +3181,12 @@ body {
 }
 
 /* Add this to prevent body scroll when modal is open */
-body.modal-open {
-  overflow: hidden;
-  height: 100vh;
+body.modal-open,
+body.modal-open .app-container,
+body.modal-open .tasks-view-container,
+body.modal-open .journal-container {
+  overflow: hidden !important;
+  height: 100vh !important;
 }
 
 /* Mobile bottom sheet */

@@ -580,6 +580,15 @@ export default function AddTaskModal({
   const underlayRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
+  const lastFocusedRef = useRef<'title' | 'description' | null>('title');
+
+  const refocusActiveInput = () => {
+    if (lastFocusedRef.current === 'description') {
+      descRef.current?.focus();
+    } else {
+      inputRef.current?.focus();
+    }
+  };
 
   const allLists = store.getState().lists || [];
 
@@ -735,11 +744,22 @@ export default function AddTaskModal({
 
     updateCoords();
 
+    const visualViewport = (window as any).visualViewport;
     if (isListDropdownOpen) {
       window.addEventListener('resize', updateCoords);
+      window.addEventListener('scroll', updateCoords);
+      if (visualViewport) {
+        visualViewport.addEventListener('resize', updateCoords);
+        visualViewport.addEventListener('scroll', updateCoords);
+      }
     }
     return () => {
       window.removeEventListener('resize', updateCoords);
+      window.removeEventListener('scroll', updateCoords);
+      if (visualViewport) {
+        visualViewport.removeEventListener('resize', updateCoords);
+        visualViewport.removeEventListener('scroll', updateCoords);
+      }
     };
   }, [isListDropdownOpen]);
 
@@ -884,6 +904,7 @@ export default function AddTaskModal({
                   value={taskName}
                   onChange={handleInputChange}
                   onScroll={handleInputScroll}
+                  onFocus={() => lastFocusedRef.current = 'title'}
                   required
                   autoComplete="off"
                   rows={1}
@@ -897,6 +918,7 @@ export default function AddTaskModal({
                 placeholder="Description"
                 value={taskDetails}
                 onChange={(e) => setTaskDetails(e.target.value)}
+                onFocus={() => lastFocusedRef.current = 'description'}
                 rows={1}
               />
 
@@ -988,7 +1010,11 @@ export default function AddTaskModal({
                   <button
                     type="button"
                     className="list-selector-btn"
-                    onClick={() => setIsListDropdownOpen(prev => !prev)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setIsListDropdownOpen(prev => !prev);
+                      refocusActiveInput();
+                    }}
                   >
                     <IconList size={15} />
                     <span>{selectedListName}</span>
@@ -1010,7 +1036,11 @@ export default function AddTaskModal({
                 <button
                   type="button"
                   className={`toolbar-action-btn ${starred ? 'active' : ''}`}
-                  onClick={() => setStarred(prev => !prev)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setStarred(prev => !prev);
+                    refocusActiveInput();
+                  }}
                   title="Toggle star"
                 >
                   {starred ? <IconStarFilled size={18} /> : <IconStar size={18} />}
@@ -1069,7 +1099,11 @@ export default function AddTaskModal({
         <>
           <div
             className="list-selector-backdrop"
-            onClick={() => setIsListDropdownOpen(false)}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setIsListDropdownOpen(false);
+              refocusActiveInput();
+            }}
           />
           <div
             className="list-selector-menu"
@@ -1086,9 +1120,11 @@ export default function AddTaskModal({
               <button
                 type="button"
                 className={`list-selector-item ${selectedListId === 'toady' ? 'active' : ''}`}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   setSelectedListId('toady');
                   setIsListDropdownOpen(false);
+                  refocusActiveInput();
                 }}
               >
                 Today
@@ -1098,9 +1134,11 @@ export default function AddTaskModal({
                   key={list.id}
                   type="button"
                   className={`list-selector-item ${String(selectedListId) === String(list.id) ? 'active' : ''}`}
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
                     setSelectedListId(list.id);
                     setIsListDropdownOpen(false);
+                    refocusActiveInput();
                   }}
                 >
                   {list.name}
