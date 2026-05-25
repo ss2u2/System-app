@@ -39,7 +39,7 @@ export function AuthenticatedLayout() {
     let newTaskToSpawn: Task | null = null;
     
     const updated = state.tasks.map(t => {
-      if (t.id === id) {
+      if (String(t.id) === String(id)) {
         const isCompleting = !t.done;
         
         if (isCompleting && t.repeatType && t.repeatType !== 'none') {
@@ -102,7 +102,7 @@ export function AuthenticatedLayout() {
   };
 
   const handleGlobalDeleteTask = (id: number | string) => {
-    const updated = state.tasks.filter(t => t.id !== id);
+    const updated = state.tasks.filter(t => String(t.id) !== String(id));
     const deletedIds = {
       ...(state.deletedIds || {}),
       tasks: [...(state.deletedIds?.tasks || []), id]

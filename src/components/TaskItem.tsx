@@ -59,7 +59,7 @@ export default function TaskItem({
         }}
       >
         {parsed.done ? (
-          <IconCheck size={10} strokeWidth={3} />
+          <IconCheck size={15} strokeWidth={3} />
         ) : (
           <div className="checkbox-inner" />
         )}
@@ -68,7 +68,7 @@ export default function TaskItem({
       {/* Details */}
       <div className="custom-task-details">
         <span className="custom-task-name">{parsed.name}</span>
-        
+
         {/* Date and Deadline display */}
         <span className="custom-task-time" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
           {/* Deadline */}
@@ -140,7 +140,7 @@ export default function TaskItem({
                       const updatedSubs = parsed.subtasks!.map((s) =>
                         s.id === st.id ? { ...s, done: !s.done } : s
                       );
-                      
+
                       // Save back to db
                       const freshState = store.getState();
                       const updatedTasks = freshState.tasks.map((t) => {
@@ -167,7 +167,7 @@ export default function TaskItem({
                       flexShrink: 0,
                     }}
                   >
-                    {st.done && <IconCheck size={10} strokeWidth={3} />}
+                    {st.done && <IconCheck size={15} strokeWidth={3} />}
                   </button>
                   <span
                     className="task-item-subtask-name"

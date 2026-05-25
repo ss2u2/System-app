@@ -155,7 +155,7 @@ export default function TasksContainer({
     }
 
     // 2. Reorder array in store.tasks to sync to server
-    const storeTasks = [...state.tasks];
+    const storeTasks = [...(state.tasks || [])];
     const storeDragIdx = storeTasks.findIndex(t => String(t.id) === String(dragId));
     const storeTargetIdx = storeTasks.findIndex(t => String(t.id) === String(targetId));
     if (storeDragIdx !== -1 && storeTargetIdx !== -1) {

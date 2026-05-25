@@ -17,11 +17,11 @@ import {
 } from '@tabler/icons-react';
 import type { SubTask } from '../types';
 import { store } from '../services/db';
-import { parseTask, formatTaskDate, formatTaskTime, generateSecureNumericId } from '../utils/taskHelper';
+import { parseTask, formatTaskDate, formatTaskTime, generateSecureNumericId, formatRepeatValue } from '../utils/taskHelper';
 import Button from './ui/Button';
 import Dropdown, { DropdownItem } from './ui/Dropdown';
 import Modal from './ui/Modal';
-import FormField from './ui/FormField';
+import CalendarPickerModal from './CalendarPickerModal';
 
 interface TaskDetailViewProps {
   taskId: number | string;
@@ -40,13 +40,21 @@ export default function TaskDetailView({
 }: TaskDetailViewProps) {
   // Fetch fresh state on mount / taskId change
   const state = store.getState();
-  const rawTask = state.tasks.find((t) => t.id === taskId);
+  const rawTask = (state.tasks || []).find((t) => String(t.id) === String(taskId));
   
-  if (!rawTask) {
-    return null;
-  }
-
-  const parsed = parseTask(rawTask);
+  const parsed = rawTask ? parseTask(rawTask) : {
+    name: '',
+    listId: 1001,
+    starred: false,
+    done: false,
+    date: '',
+    time: '',
+    repeatType: 'none',
+    repeatValue: '',
+    deadline: '',
+    details: '',
+    subtasks: []
+  };
 
   // Form states
   const [name, setName] = useState(parsed.name);
@@ -71,24 +79,16 @@ export default function TaskDetailView({
   const [newSubtaskText, setNewSubtaskText] = useState('');
 
   // Dropdowns / Modals visibility
-  const [isDateTimeModalOpen, setIsDateTimeModalOpen] = useState(false);
-  const [isCustomRepeatOpen, setIsCustomRepeatOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   
   // Conflict warning modals
   const [conflictType, setConflictType] = useState<'repeat-warning' | 'deadline-warning' | null>(null);
   const [pendingDeadline, setPendingDeadline] = useState('');
   const [pendingRepeat, setPendingRepeat] = useState<{ type: string; val: string }>({ type: 'none', val: '' });
 
-  // Temp Date/Time/Repeat settings for the modal
+  // Temp Date/Time/Repeat settings for holding conflict resolutions
   const [tempDate, setTempDate] = useState('');
   const [tempTime, setTempTime] = useState('');
-  const [tempRepeatType, setTempRepeatType] = useState<string>('none');
-  const [tempEvery, setTempEvery] = useState(1);
-  const [tempUnit, setTempUnit] = useState<'day' | 'week' | 'month' | 'year'>('week');
-  const [tempDays, setTempDays] = useState<number[]>([]);
-  const [tempEnds, setTempEnds] = useState<'never' | 'on' | 'after'>('never');
-  const [tempEndsOn, setTempEndsOn] = useState('');
-  const [tempEndsAfter, setTempEndsAfter] = useState(13);
 
   // Refs
   const deadlineInputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +101,11 @@ export default function TaskDetailView({
       detailsRef.current.style.height = `${detailsRef.current.scrollHeight}px`;
     }
   }, [details]);
+
+  // Early return if task doesn't exist (done after hook declarations)
+  if (!rawTask) {
+    return null;
+  }
 
   // Sync state back to store whenever critical values change
   const saveTaskDetails = (
@@ -118,7 +123,7 @@ export default function TaskDetailView({
   ) => {
     const freshState = store.getState();
     const updatedTasks = freshState.tasks.map((t) => {
-      if (t.id === taskId) {
+      if (String(t.id) === String(taskId)) {
         return {
           ...t,
           name: currentName.trim() || 'Untitled Task',
@@ -234,68 +239,7 @@ export default function TaskDetailView({
 
   // Date/Time Modal Save
   const openDateTimeModal = () => {
-    setTempDate(date);
-    setTempTime(time);
-    setTempRepeatType(repeatType);
-
-    if (repeatType === 'custom' && repeatValue) {
-      try {
-        const config = JSON.parse(repeatValue);
-        setTempEvery(config.every || 1);
-        setTempUnit(config.unit || 'week');
-        setTempDays(config.days || []);
-        setTempEnds(config.ends || 'never');
-        setTempEndsOn(config.endsOn || '');
-        setTempEndsAfter(config.endsAfter || 13);
-      } catch (err) {
-        console.error(err);
-      }
-    } else {
-      setTempEvery(1);
-      setTempUnit('week');
-      setTempDays([]);
-      setTempEnds('never');
-      setTempEndsOn('');
-      setTempEndsAfter(13);
-    }
-    setIsDateTimeModalOpen(true);
-  };
-
-  const handleSaveDateTime = () => {
-    let finalRepeatVal = '';
-    if (tempRepeatType === 'custom') {
-      finalRepeatVal = JSON.stringify({
-        every: tempEvery,
-        unit: tempUnit,
-        days: tempDays,
-        ends: tempEnds,
-        endsOn: tempEndsOn,
-        endsAfter: tempEndsAfter,
-      });
-    }
-
-    if (tempRepeatType !== 'none' && deadline) {
-      // Conflict! Making this task repeat will remove the deadline.
-      setPendingRepeat({ type: tempRepeatType, val: finalRepeatVal });
-      setConflictType('repeat-warning');
-    } else {
-      setDate(tempDate);
-      setTime(tempTime);
-      setRepeatType(tempRepeatType);
-      setRepeatValue(finalRepeatVal);
-      saveTaskDetails(
-        name,
-        listId,
-        starred,
-        done,
-        tempDate,
-        tempTime,
-        tempRepeatType,
-        finalRepeatVal,
-        deadline
-      );
-      setIsDateTimeModalOpen(false);
-    }
+    setIsCalendarOpen(true);
   };
 
   // Conflict Resolution: Repeat task anyway (clears deadline)
@@ -320,7 +264,7 @@ export default function TaskDetailView({
     );
 
     setConflictType(null);
-    setIsDateTimeModalOpen(false);
+    setIsCalendarOpen(false);
   };
 
   // Conflict Resolution: Set deadline anyway (clears repeat schedule)
@@ -439,22 +383,15 @@ export default function TaskDetailView({
 
   // Render format for Repeat display string
   const getRepeatDisplay = () => {
-    if (repeatType === 'daily') return 'Daily';
-    if (repeatType === 'custom' && repeatValue) {
-      try {
-        const config = JSON.parse(repeatValue);
-        return `Every ${config.every} ${config.unit}${config.every > 1 ? 's' : ''}`;
-      } catch (err) {
-        return 'Custom';
-      }
-    }
-    return '';
+    return formatRepeatValue(repeatType, repeatValue, time);
   };
 
   const activeListName = lists.find((l) => l.id === Number(listId))?.name || 'My Tasks';
 
   return (
-    <div className="task-detail-overlay">
+    <>
+      <div className="task-detail-backdrop" onClick={handleClose} />
+      <div className="task-detail-overlay">
       {/* Top Bar */}
       <div className="task-detail-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -597,12 +534,6 @@ export default function TaskDetailView({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span>{formatTaskDate(date)}</span>
                     {time && <span>, {formatTaskTime(time)}</span>}
-                    {repeatType !== 'none' && (
-                      <span className="pill-repeat-indicator">
-                        <IconRepeat size={12} />
-                        <span>{getRepeatDisplay()}</span>
-                      </span>
-                    )}
                   </div>
                   <button
                     className="pill-clear-btn"
@@ -635,6 +566,49 @@ export default function TaskDetailView({
               )}
             </div>
           </div>
+
+          {/* 3.5 Repeat Row */}
+          {date && (
+            <div className="task-detail-row" style={{ marginTop: 4 }}>
+              <div className="task-detail-row-icon">
+                <IconRepeat size={20} />
+              </div>
+              <div className="task-detail-row-content">
+                {repeatType !== 'none' ? (
+                  <div className="task-detail-pill" onClick={openDateTimeModal} style={{ width: '100%', justifyContent: 'space-between', display: 'flex' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>{getRepeatDisplay()}</span>
+                    </div>
+                    <button
+                      className="pill-clear-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRepeatType('none');
+                        setRepeatValue('');
+                        saveTaskDetails(
+                          name,
+                          listId,
+                          starred,
+                          done,
+                          date,
+                          time,
+                          'none',
+                          '',
+                          deadline
+                        );
+                      }}
+                    >
+                      <IconX size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button className="task-detail-add-row-btn" onClick={openDateTimeModal}>
+                    Add repeat
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 4. Subtasks Section */}
           <div className="task-detail-row align-start">
@@ -701,11 +675,10 @@ export default function TaskDetailView({
       </div>
 
       {/* Bottom Action Bar */}
-      <div className="task-detail-bottom-bar" style={{ gap: '12px', display: 'flex' }}>
+      <div className="task-detail-bottom-bar">
         <Button
           onClick={handleToggleCompleteDetail}
           className="task-detail-complete-btn secondary"
-          style={{ flex: 1 }}
         >
           {done ? 'Mark uncompleted' : 'Mark completed'}
         </Button>
@@ -713,250 +686,48 @@ export default function TaskDetailView({
           variant="primary"
           onClick={handleClose}
           className="task-detail-complete-btn"
-          style={{ flex: 1 }}
         >
           Done
         </Button>
       </div>
 
-      {/* ==================== DATE TIME REPEAT MODAL ==================== */}
-      <Modal
-        isOpen={isDateTimeModalOpen}
-        onClose={() => setIsDateTimeModalOpen(false)}
-        title="Edit Date/Time & Repeat"
-      >
-        <FormField label="Due Date (Optional)" htmlFor="detail-date-input">
-          <input
-            id="detail-date-input"
-            type="date"
-            value={tempDate}
-            onChange={(e) => setTempDate(e.target.value)}
-            className="ui-input"
-          />
-        </FormField>
-
-        <FormField label="Due Time (Optional)" htmlFor="detail-time-input">
-          <input
-            id="detail-time-input"
-            type="time"
-            value={tempTime}
-            onChange={(e) => setTempTime(e.target.value)}
-            className="ui-input"
-          />
-        </FormField>
-
-        <FormField label="Repeat" htmlFor="detail-repeat-select">
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <select
-              id="detail-repeat-select"
-              value={tempRepeatType}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === 'custom') {
-                  setIsCustomRepeatOpen(true);
-                } else {
-                  setTempRepeatType(val);
-                }
-              }}
-              className="ui-select"
-              style={{ flex: 1 }}
-            >
-              <option value="none">None</option>
-              <option value="daily">Daily</option>
-              <option value="custom">Custom...</option>
-            </select>
-            {tempRepeatType === 'custom' && (
-              <Button
-                type="button"
-                onClick={() => setIsCustomRepeatOpen(true)}
-                style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, minWidth: 'auto' }}
-              >
-                Edit Rule
-              </Button>
-            )}
-          </div>
-          {tempRepeatType === 'custom' && (
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
-              Rule: Every {tempEvery} {tempUnit}{tempEvery > 1 ? 's' : ''}
-              {tempUnit === 'week' && tempDays.length > 0 && (
-                ` on ${tempDays.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}`
-              )}
-              {tempEnds === 'on' && tempEndsOn && ` until ${tempEndsOn}`}
-              {tempEnds === 'after' && ` for ${tempEndsAfter} times`}
-            </div>
-          )}
-        </FormField>
-
-        <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
-          <Button type="button" onClick={() => setIsDateTimeModalOpen(false)} style={{ flex: 1 }}>
-            Cancel
-          </Button>
-          <Button type="button" variant="primary" onClick={handleSaveDateTime} style={{ flex: 1 }}>
-            Done
-          </Button>
-        </div>
-      </Modal>
-
-      {/* ==================== CUSTOM RECURRENCE MODAL ==================== */}
-      <Modal
-        isOpen={isCustomRepeatOpen}
-        onClose={() => setIsCustomRepeatOpen(false)}
-        title="Repeats every"
-        maxWidth="360px"
-      >
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
-          <input
-            type="number"
-            min="1"
-            value={tempEvery}
-            onChange={(e) => setTempEvery(Math.max(1, parseInt(e.target.value, 10) || 1))}
-            className="ui-input"
-            style={{
-              width: 70,
-              textAlign: 'center',
-            }}
-          />
-          <select
-            value={tempUnit}
-            onChange={(e) => setTempUnit(e.target.value as any)}
-            className="ui-select"
-            style={{
-              flex: 1,
-            }}
-          >
-            <option value="day">day</option>
-            <option value="week">week</option>
-            <option value="month">month</option>
-            <option value="year">year</option>
-          </select>
-        </div>
-
-        {tempUnit === 'week' && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((dayChar, index) => {
-              const isSelected = tempDays.includes(index);
-              return (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => {
-                    if (isSelected) {
-                      setTempDays(tempDays.filter(d => d !== index));
-                    } else {
-                      setTempDays([...tempDays, index]);
-                    }
-                  }}
-                  className={`weekday-btn ${isSelected ? 'active' : ''}`}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: '50%',
-                    border: 'none',
-                    background: isSelected ? 'var(--accent)' : 'var(--bg3)',
-                    color: isSelected ? '#fff' : 'var(--text)',
-                    fontSize: 12,
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  {dayChar}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 'bold', color: 'var(--text2)', marginBottom: 12 }}>Ends</div>
-          
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 12, fontSize: 14 }}>
-            <input
-              type="radio"
-              name="ends-detail"
-              checked={tempEnds === 'never'}
-              onChange={() => setTempEnds('never')}
-              style={{ accentColor: 'var(--accent)' }}
-            />
-            <span>Never</span>
-          </label>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, fontSize: 14 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flexShrink: 0 }}>
-              <input
-                type="radio"
-                name="ends-detail"
-                checked={tempEnds === 'on'}
-                onChange={() => setTempEnds('on')}
-                style={{ accentColor: 'var(--accent)' }}
-              />
-              <span>On</span>
-            </label>
-            <input
-              type="date"
-              disabled={tempEnds !== 'on'}
-              value={tempEndsOn}
-              onChange={(e) => setTempEndsOn(e.target.value)}
-              className="ui-input"
-              style={{
-                flex: 1,
-                opacity: tempEnds === 'on' ? 1 : 0.6,
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flexShrink: 0 }}>
-              <input
-                type="radio"
-                name="ends-detail"
-                checked={tempEnds === 'after'}
-                onChange={() => setTempEnds('after')}
-                style={{ accentColor: 'var(--accent)' }}
-              />
-              <span>After</span>
-            </label>
-            <input
-              type="number"
-              min="1"
-              disabled={tempEnds !== 'after'}
-              value={tempEndsAfter}
-              onChange={(e) => setTempEndsAfter(Math.max(1, parseInt(e.target.value, 10) || 1))}
-              className="ui-input"
-              style={{
-                width: 70,
-                textAlign: 'center',
-                opacity: tempEnds === 'after' ? 1 : 0.6,
-              }}
-            />
-            <span style={{ color: 'var(--text3)', fontSize: 13 }}>occurrences</span>
-          </div>
-        </div>
-
-        <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: 24 }}>
-          <Button
-            type="button"
-            onClick={() => setIsCustomRepeatOpen(false)}
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => {
-              setTempRepeatType('custom');
-              setIsCustomRepeatOpen(false);
-            }}
-            style={{ flex: 1 }}
-          >
-            Done
-          </Button>
-        </div>
-      </Modal>
+      {/* ==================== CALENDAR SCHEDULER PICKER MODAL ==================== */}
+      <CalendarPickerModal
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+        date={date}
+        time={time}
+        deadline={deadline}
+        repeatType={repeatType}
+        repeatValue={repeatValue}
+        onSave={(data) => {
+          if (data.repeatType !== 'none' && data.deadline) {
+            setPendingRepeat({ type: data.repeatType, val: data.repeatValue });
+            setTempDate(data.date);
+            setTempTime(data.time);
+            setConflictType('repeat-warning');
+          } else {
+            setDate(data.date);
+            setTime(data.time);
+            setDeadline(data.deadline);
+            setRepeatType(data.repeatType);
+            setRepeatValue(data.repeatValue);
+            saveTaskDetails(
+              name,
+              listId,
+              starred,
+              done,
+              data.date,
+              data.time,
+              data.repeatType,
+              data.repeatValue,
+              data.deadline,
+              details,
+              subtasks
+            );
+          }
+        }}
+      />
 
       {/* ==================== CONFLICT RESOLUTION WARNING MODALS ==================== */}
       <Modal
@@ -985,5 +756,6 @@ export default function TaskDetailView({
         </div>
       </Modal>
     </div>
+    </>
   );
 }

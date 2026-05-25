@@ -7,19 +7,19 @@ interface FloatingActionButtonProps {
   className?: string;
 }
 
-export default function FloatingActionButton({ 
-  onClick, 
-  icon: Icon, 
-  title, 
-  className = "" 
+export default function FloatingActionButton({
+  onClick,
+  icon: Icon,
+  title,
+  className = ""
 }: FloatingActionButtonProps) {
   return (
-    <button 
-      className={`shared-fab ${className}`} 
-      onClick={onClick} 
+    <button
+      className={`shared-fab ${className}`}
+      onClick={onClick}
       title={title}
     >
-      <Icon size={24} stroke={2.5} />
+      <Icon size={24} stroke={2.1} />
     </button>
   );
 }

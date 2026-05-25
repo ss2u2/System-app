@@ -150,27 +150,33 @@ export default function DashboardView() {
   // Saves
   const handleSaveNewTask = (taskData: {
     name: string;
+    details: string;
+    listId: number | string;
+    starred: boolean;
     date: string;
     time: string;
     repeatType: 'none' | 'daily' | 'custom';
     repeatValue: string;
+    deadline: string;
   }) => {
     const newTaskId = generateSecureNumericId();
     const newTask: Task = {
       id: newTaskId,
       name: taskData.name,
+      details: taskData.details,
       done: false,
-      listId: 'toady',
-      starred: false,
+      listId: taskData.listId || 'toady',
+      starred: taskData.starred || false,
       createdAt: Date.now(),
       date: taskData.date || undefined,
       time: taskData.time || undefined,
       repeatType: taskData.repeatType || 'none',
       repeatValue: taskData.repeatValue || '',
+      deadline: taskData.deadline || undefined,
       cat: '',
       subtasks: []
     };
-    store.setState({ tasks: [...state.tasks, newTask] });
+    store.setState({ tasks: [...(state.tasks || []), newTask] });
   };
 
   const saveSession = (e: React.FormEvent) => {
@@ -669,7 +675,8 @@ export default function DashboardView() {
       <AddTaskModal
         isOpen={activeModal === 'task'}
         onClose={() => setActiveModal(null)}
-        title="Add Task"
+        initialListId="toady"
+        initialStarred={false}
         onSave={handleSaveNewTask}
       />
 

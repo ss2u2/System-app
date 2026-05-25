@@ -64,8 +64,8 @@ export default function TasksView() {
 
   const handleDeleteList = (listId: number | string) => {
     if (window.confirm('Are you sure you want to delete this list and all its tasks?')) {
-      const updatedLists = (state.lists || []).filter(l => l.id !== listId);
-      const updatedTasks = (state.tasks || []).filter(t => t.listId !== listId);
+      const updatedLists = (state.lists || []).filter(l => String(l.id) !== String(listId));
+      const updatedTasks = (state.tasks || []).filter(t => String(t.listId) !== String(listId));
       
       const deletedIds = {
         ...(state.deletedIds || {}),
@@ -79,31 +79,34 @@ export default function TasksView() {
 
   const handleCreateTask = (taskData: {
     name: string;
+    details: string;
+    listId: number | string;
+    starred: boolean;
     date: string;
     time: string;
     repeatType: 'none' | 'daily' | 'custom';
     repeatValue: string;
+    deadline: string;
   }) => {
-    const listId = activeListId === 'starred' ? 1001 : (isNaN(Number(activeListId)) ? activeListId : Number(activeListId));
-    const isStarred = activeListId === 'starred';
-
     const newTaskId = generateSecureNumericId();
     const newTask: Task = {
       id: newTaskId,
       name: taskData.name,
+      details: taskData.details,
       done: false,
-      listId,
-      starred: isStarred,
+      listId: taskData.listId,
+      starred: taskData.starred,
       createdAt: Date.now(),
       date: taskData.date || undefined,
       time: taskData.time || undefined,
       repeatType: taskData.repeatType || 'none',
       repeatValue: taskData.repeatValue || '',
+      deadline: taskData.deadline || undefined,
       cat: '',
       subtasks: []
     };
 
-    store.setState({ tasks: [...state.tasks, newTask] });
+    store.setState({ tasks: [...(state.tasks || []), newTask] });
   };
 
   const handleToggleStar = (taskId: number | string, e: React.MouseEvent) => {
@@ -226,7 +229,8 @@ export default function TasksView() {
       <AddTaskModal
         isOpen={isNewTaskOpen}
         onClose={() => setIsNewTaskOpen(false)}
-        title={`Add Task to ${activeListName}`}
+        initialListId={activeListId}
+        initialStarred={activeListId === 'starred'}
         onSave={handleCreateTask}
       />
     </div>

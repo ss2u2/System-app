@@ -45,6 +45,36 @@ export const getRelativeTimeString = (timestamp: number) => {
   return 'just now';
 };
 
+export const getNthWeekdayOfMonth = (year: number, month: number, weekday: number, occurrence: number): Date => {
+  const firstDayOfMonth = new Date(year, month, 1);
+  let firstDayOffset = weekday - firstDayOfMonth.getDay();
+  if (firstDayOffset < 0) {
+    firstDayOffset += 7;
+  }
+  let targetDay = 1 + firstDayOffset + (occurrence - 1) * 7;
+  const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+  if (targetDay > lastDayOfMonth) {
+    targetDay -= 7;
+  }
+  return new Date(year, month, targetDay);
+};
+
+export const getWeekdayOccurrenceInfo = (dateObj: Date) => {
+  const dayOfMonth = dateObj.getDate();
+  const occurrence = Math.ceil(dayOfMonth / 7);
+  const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const weekdayName = weekdays[dateObj.getDay()];
+  const ordinals = ['first', 'second', 'third', 'fourth', 'last'];
+  const ordinal = ordinals[occurrence - 1] || 'last';
+  return {
+    occurrence,
+    weekday: dateObj.getDay(),
+    weekdayName,
+    ordinal,
+    labelText: `every ${ordinal} ${weekdayName}`
+  };
+};
+
 export const getNextOccurrenceDate = (
   baseDateStr: string,
   repeatType: string,
@@ -103,6 +133,16 @@ export const getNextOccurrenceDate = (
         }
       } else if (unit === 'month') {
         nextDate.setMonth(nextDate.getMonth() + every);
+        if (config.monthMode === 'weekday') {
+          const weekday = config.weekday !== undefined ? config.weekday : baseDate.getDay();
+          const occurrence = config.weekdayOccurrence !== undefined ? config.weekdayOccurrence : Math.ceil(baseDate.getDate() / 7);
+          const resolvedDate = getNthWeekdayOfMonth(nextDate.getFullYear(), nextDate.getMonth(), weekday, occurrence);
+          nextDate.setTime(resolvedDate.getTime());
+        } else {
+          const dayOfMonth = config.dayOfMonth !== undefined ? config.dayOfMonth : baseDate.getDate();
+          const lastDayOfTargetMonth = new Date(nextDate.getFullYear(), nextDate.getMonth() + 1, 0).getDate();
+          nextDate.setDate(Math.min(dayOfMonth, lastDayOfTargetMonth));
+        }
       } else if (unit === 'year') {
         nextDate.setFullYear(nextDate.getFullYear() + every);
       }
@@ -183,3 +223,69 @@ export function parseTask(t: Task): ParsedTask {
     subtasks: t.subtasks || []
   };
 }
+
+export const formatRepeatValue = (repeatType: string, repeatValue: string, taskTime?: string): string => {
+  if (repeatType === 'daily') {
+    const timeSuffix = taskTime ? `, ${formatTaskTime(taskTime)}` : '';
+    return `Daily${timeSuffix}`;
+  }
+  if (repeatType === 'custom' && repeatValue) {
+    try {
+      const config = JSON.parse(repeatValue);
+      const every = Number(config.every) || 1;
+      const unit = config.unit || 'week';
+      
+      let repeatStr = '';
+      
+      if (unit === 'day') {
+        repeatStr = `Every ${every} day${every > 1 ? 's' : ''}`;
+      } else if (unit === 'week') {
+        const days: number[] = config.days || [];
+        if (days.length === 0) {
+          repeatStr = `Every ${every} week${every > 1 ? 's' : ''}`;
+        } else {
+          const weekdayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const dayNames = days.map(d => weekdayNamesShort[d]).join(', ');
+          if (every === 1) {
+            repeatStr = `Weekly on ${dayNames}`;
+          } else {
+            repeatStr = `Every ${every} weeks on ${dayNames}`;
+          }
+        }
+      } else if (unit === 'month') {
+        if (config.monthMode === 'weekday') {
+          const weekdayNamesLong = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const ordinals = ['first', 'second', 'third', 'fourth', 'last'];
+          const weekday = config.weekday !== undefined ? config.weekday : 4;
+          const occurrence = config.weekdayOccurrence !== undefined ? config.weekdayOccurrence : 4;
+          const weekdayText = weekdayNamesLong[weekday];
+          const ordinalText = ordinals[occurrence - 1] || 'last';
+          
+          if (every === 1) {
+            repeatStr = `Monthly (on every ${ordinalText} ${weekdayText})`;
+          } else {
+            repeatStr = `Every ${every} months (on every ${ordinalText} ${weekdayText})`;
+          }
+        } else {
+          const dayOfMonth = config.dayOfMonth !== undefined ? config.dayOfMonth : 28;
+          if (every === 1) {
+            repeatStr = `Monthly (on day ${dayOfMonth})`;
+          } else {
+            repeatStr = `Every ${every} months (on day ${dayOfMonth})`;
+          }
+        }
+      } else if (unit === 'year') {
+        repeatStr = `Every ${every} year${every > 1 ? 's' : ''}`;
+      }
+      
+      const timeVal = config.time || taskTime;
+      if (timeVal) {
+        repeatStr += `, ${formatTaskTime(timeVal)}`;
+      }
+      return repeatStr;
+    } catch (e) {
+      return 'Custom';
+    }
+  }
+  return '';
+};
