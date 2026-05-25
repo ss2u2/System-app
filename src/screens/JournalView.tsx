@@ -20,6 +20,7 @@ import Button from '../components/ui/Button';
 import Dropdown, { DropdownItem } from '../components/ui/Dropdown';
 import Card from '../components/ui/Card';
 import BookmarkToggle from '../components/ui/BookmarkToggle';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
 
 export default function JournalView() {
   const { entryId } = useParams();
@@ -31,6 +32,7 @@ export default function JournalView() {
   const [isEditing, setIsEditing] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
   const [showImageInput, setShowImageInput] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState<number | string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -86,15 +88,20 @@ export default function JournalView() {
   };
 
   const handleDeleteEntry = (id: number | string) => {
-    if (window.confirm('Are you sure you want to delete this journal entry?')) {
-      const updated = state.journals.filter((j) => String(j.id) !== String(id));
-      const deletedIds = {
-        ...(state.deletedIds || {}),
-        journals: [...(state.deletedIds?.journals || []), id],
-      };
-      store.setState({ journals: updated, deletedIds });
-      navigate('/journal');
-    }
+    setEntryToDelete(id);
+  };
+
+  const confirmDelete = () => {
+    if (!entryToDelete) return;
+    const id = entryToDelete;
+    const updated = state.journals.filter((j) => String(j.id) !== String(id));
+    const deletedIds = {
+      ...(state.deletedIds || {}),
+      journals: [...(state.deletedIds?.journals || []), id],
+    };
+    store.setState({ journals: updated, deletedIds });
+    setEntryToDelete(null);
+    navigate('/journal');
   };
 
   const isEntryEmpty = (entry: JournalEntry) => {
@@ -601,6 +608,14 @@ export default function JournalView() {
           )}
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={entryToDelete !== null}
+        onClose={() => setEntryToDelete(null)}
+        onConfirm={confirmDelete}
+        title="Are you sure you want to delete this journal entry?"
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

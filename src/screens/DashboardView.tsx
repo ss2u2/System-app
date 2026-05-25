@@ -19,6 +19,7 @@ import type { AppState, Task, Session, WeeklyGoal, MonthlyGoal, StaticGoal } fro
 import TaskItem from '../components/TaskItem';
 import AddTaskModal from '../components/AddTaskModal';
 import { generateSecureNumericId } from '../utils/taskHelper';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
 // Import UI Design System components
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -44,6 +45,7 @@ export default function DashboardView() {
 
   // Modals state
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ type: 'task' | 'session'; id: number | string; name: string } | null>(null);
 
   const [sessionName, setSessionName] = useState('');
   const [sessionIcon, setSessionIcon] = useState('🏋️');
@@ -124,21 +126,30 @@ export default function DashboardView() {
 
   const handleDeleteTask = (taskId: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Delete this task?')) {
-      handleGlobalDeleteTask(taskId);
-    }
+    const task = state.tasks.find(t => t.id === taskId);
+    setItemToDelete({ type: 'task', id: taskId, name: task?.name || 'this task' });
   };
 
   const handleDeleteSession = (index: number) => {
-    const sessionToDelete = state.sessions[index];
-    if (window.confirm(`Delete "${sessionToDelete.name}"?`)) {
-      const updated = state.sessions.filter((_, idx) => idx !== index);
+    const session = state.sessions[index];
+    setItemToDelete({ type: 'session', id: index, name: session.name });
+  };
+
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    if (itemToDelete.type === 'task') {
+      handleGlobalDeleteTask(itemToDelete.id);
+    } else {
+      const idx = itemToDelete.id as number;
+      const sessionToDelete = state.sessions[idx];
+      const updated = state.sessions.filter((_, i) => i !== idx);
       const deletedIds = {
         ...(state.deletedIds || {}),
         sessions: [...(state.deletedIds?.sessions || []), sessionToDelete.id],
       };
       store.setState({ sessions: updated, deletedIds });
     }
+    setItemToDelete(null);
   };
 
   const handleUpdateStaticProg = (index: number, val: string) => {
@@ -848,6 +859,14 @@ export default function DashboardView() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={itemToDelete !== null}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={confirmDelete}
+        title={itemToDelete?.type === 'task' ? `Delete ${itemToDelete.name}?` : `Delete "${itemToDelete?.name}"?`}
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

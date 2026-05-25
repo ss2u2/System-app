@@ -206,7 +206,8 @@ export function triggerSync(): void {
             repeat_type: t.repeatType || 'none',
             repeat_value: parsedRepeatValue,
             deadline: t.deadline || null,
-            details: t.details || null
+            details: t.details || null,
+            created_at: t.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString()
           };
         });
         const { error } = await client.from('tasks').upsert(payloads, { onConflict: 'id' });
@@ -303,7 +304,8 @@ export function triggerSync(): void {
             bookmarked: j.bookmarked || false,
             location: j.location || null,
             images: Array.isArray(j.images) ? j.images : [],
-            draft: j.draft || false
+            draft: j.draft || false,
+            created_at: j.created_at || new Date().toISOString()
           };
         });
         const { error } = await client.from('journals').upsert(payloads, { onConflict: 'id' });
@@ -455,6 +457,7 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
           repeatValue: repeatValStr,
           deadline: t.deadline || undefined,
           details: t.details || undefined,
+          createdAt: t.created_at ? new Date(t.created_at).getTime() : (typeof t.id === 'number' ? Number(t.id) : Date.now()),
           subtasks: (t.subtasks || []).map((st: any) => ({
             id: Number(st.id),
             name: st.name,

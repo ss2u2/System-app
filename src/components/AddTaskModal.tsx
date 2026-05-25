@@ -8,8 +8,9 @@ import {
   IconRepeat,
   IconX,
   IconChevronDown,
-  IconFolder
+  IconList
 } from '@tabler/icons-react';
+import ConfirmationModal from './ui/ConfirmationModal';
 import { store } from '../services/db';
 import { formatTaskDate, formatTaskTime, formatRepeatValue, getNthWeekdayOfMonth, getLocalDateString, getNextOccurrenceDate } from '../utils/taskHelper';
 import CalendarPickerModal from './CalendarPickerModal';
@@ -565,6 +566,8 @@ export default function AddTaskModal({
   // Sub-modal toggle states
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isListDropdownOpen, setIsListDropdownOpen] = useState(false);
+  const [dropdownCoords, setDropdownCoords] = useState<{ left: number; bottom: number; width: number } | null>(null);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // Keep track of manual edits so NLP doesn't override user choices
   const [isManuallyEdited, setIsManuallyEdited] = useState({
@@ -575,9 +578,94 @@ export default function AddTaskModal({
 
   const listDropdownRef = useRef<HTMLDivElement>(null);
   const underlayRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const descRef = useRef<HTMLTextAreaElement>(null);
 
   const allLists = store.getState().lists || [];
+
+  const isDirty = taskName.trim() !== '' || taskDetails.trim() !== '';
+
+  const handleClose = () => {
+    if (isDirty) {
+      setShowDiscardConfirm(true);
+    } else {
+      onClose();
+    }
+  };
+
+  // Auto-resize textarea function
+  const adjustHeight = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  };
+
+  useEffect(() => {
+    adjustHeight(inputRef.current);
+  }, [taskName]);
+
+  useEffect(() => {
+    adjustHeight(descRef.current);
+  }, [taskDetails]);
+
+  // Handle keyboard height on mobile
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleViewportChange = () => {
+      const visualViewport = (window as any).visualViewport;
+      if (visualViewport) {
+        const overlay = document.querySelector('.task-modal-overlay') as HTMLElement;
+        if (overlay) {
+          // Calculate the offset from the top of the visual viewport
+          // and set the overlay height to match the visible area
+          overlay.style.height = `${visualViewport.height}px`;
+          overlay.style.top = `${visualViewport.offsetTop}px`;
+          window.scrollTo(0, 0);
+        }
+      }
+    };
+
+    const visualViewport = (window as any).visualViewport;
+    if (visualViewport) {
+      visualViewport.addEventListener('resize', handleViewportChange);
+      visualViewport.addEventListener('scroll', handleViewportChange);
+      handleViewportChange();
+    }
+
+    // Intercept back button for discard confirmation
+    const handlePopState = (_e: PopStateEvent) => {
+      if (isOpen && isDirty) {
+        // Stop the popstate (preventing immediate navigation if possible)
+        window.history.pushState(null, '', window.location.href);
+        setShowDiscardConfirm(true);
+      }
+    };
+    
+    // Add a dummy entry to history to allow intercepting the next back button
+    if (isOpen) {
+      window.history.pushState(null, '', window.location.href);
+      window.addEventListener('popstate', handlePopState);
+    }
+
+    return () => {
+      if (visualViewport) {
+        visualViewport.removeEventListener('resize', handleViewportChange);
+        visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isOpen, isDirty]);
+
+  // Handle body scroll locking
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    return () => document.body.classList.remove('modal-open');
+  }, [isOpen]);
 
   // Reset fields on modal open/close
   useEffect(() => {
@@ -608,6 +696,8 @@ export default function AddTaskModal({
       setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.focus();
+          adjustHeight(inputRef.current);
+          adjustHeight(descRef.current);
         }
       }, 50);
     }
@@ -616,7 +706,13 @@ export default function AddTaskModal({
   // Handle click outside list selector dropdown
   useEffect(() => {
     const clickHandler = (e: MouseEvent) => {
-      if (listDropdownRef.current && !listDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      const isInsideMenu = target.closest('.list-selector-menu');
+      if (
+        listDropdownRef.current &&
+        !listDropdownRef.current.contains(target) &&
+        !isInsideMenu
+      ) {
         setIsListDropdownOpen(false);
       }
     };
@@ -624,8 +720,31 @@ export default function AddTaskModal({
     return () => document.removeEventListener('mousedown', clickHandler);
   }, []);
 
+  // Dynamically calculate select list dropdown position to prevent viewport clipping
+  useEffect(() => {
+    const updateCoords = () => {
+      if (isListDropdownOpen && listDropdownRef.current) {
+        const rect = listDropdownRef.current.getBoundingClientRect();
+        setDropdownCoords({
+          left: rect.left,
+          bottom: window.innerHeight - rect.top + 8,
+          width: Math.max(180, rect.width),
+        });
+      }
+    };
+
+    updateCoords();
+
+    if (isListDropdownOpen) {
+      window.addEventListener('resize', updateCoords);
+    }
+    return () => {
+      window.removeEventListener('resize', updateCoords);
+    };
+  }, [isListDropdownOpen]);
+
   // Dynamically parse text while typing (NLP)
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setTaskName(val);
 
@@ -654,7 +773,7 @@ export default function AddTaskModal({
 
   const handleInputScroll = () => {
     if (inputRef.current && underlayRef.current) {
-      underlayRef.current.scrollLeft = inputRef.current.scrollLeft;
+      underlayRef.current.scrollTop = inputRef.current.scrollTop;
     }
   };
 
@@ -688,6 +807,11 @@ export default function AddTaskModal({
 
     if (lastIndex < taskName.length) {
       elements.push(taskName.substring(lastIndex));
+    }
+
+    // Add a trailing newline to match textarea behavior when ending in newline
+    if (taskName.endsWith('\n')) {
+      elements.push('\n ');
     }
 
     return elements;
@@ -741,7 +865,7 @@ export default function AddTaskModal({
     <>
       <div
         className="task-modal-overlay open"
-        onClick={(e) => e.target === e.currentTarget && onClose()}
+        onClick={(e) => e.target === e.currentTarget && handleClose()}
       >
         <div className="task-modal-content">
           <div className="task-modal-drag-handle" />
@@ -753,9 +877,8 @@ export default function AddTaskModal({
                 <div ref={underlayRef} className="nlp-input-underlay">
                   {getUnderlayContent()}
                 </div>
-                <input
+                <textarea
                   ref={inputRef}
-                  type="text"
                   className="nlp-input-textarea"
                   placeholder="New task"
                   value={taskName}
@@ -763,16 +886,18 @@ export default function AddTaskModal({
                   onScroll={handleInputScroll}
                   required
                   autoComplete="off"
+                  rows={1}
                 />
               </div>
 
               {/* Task Description */}
               <textarea
+                ref={descRef}
                 className="nlp-desc-textarea"
                 placeholder="Description"
                 value={taskDetails}
                 onChange={(e) => setTaskDetails(e.target.value)}
-                rows={2}
+                rows={1}
               />
 
               {/* Dynamic Chips (Active scheduling configuration) */}
@@ -856,44 +981,19 @@ export default function AddTaskModal({
             <div className="task-modal-toolbar">
               <div className="task-modal-toolbar-left">
                 {/* 1. Folder List Selector */}
-                <div ref={listDropdownRef} className="list-selector-dropdown-container">
+                <div
+                  ref={listDropdownRef}
+                  className={`list-selector-dropdown-container ${isListDropdownOpen ? 'open' : ''}`}
+                >
                   <button
                     type="button"
                     className="list-selector-btn"
                     onClick={() => setIsListDropdownOpen(prev => !prev)}
                   >
-                    <IconFolder size={15} />
+                    <IconList size={15} />
                     <span>{selectedListName}</span>
                     <IconChevronDown size={12} />
                   </button>
-
-                  {isListDropdownOpen && (
-                    <div className="list-selector-menu">
-                      <button
-                        type="button"
-                        className={`list-selector-item ${selectedListId === 'toady' ? 'active' : ''}`}
-                        onClick={() => {
-                          setSelectedListId('toady');
-                          setIsListDropdownOpen(false);
-                        }}
-                      >
-                        Today
-                      </button>
-                      {allLists.map((list) => (
-                        <button
-                          key={list.id}
-                          type="button"
-                          className={`list-selector-item ${String(selectedListId) === String(list.id) ? 'active' : ''}`}
-                          onClick={() => {
-                            setSelectedListId(list.id);
-                            setIsListDropdownOpen(false);
-                          }}
-                        >
-                          {list.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
                 {/* 2. Custom Calendar Trigger Button */}
@@ -956,6 +1056,60 @@ export default function AddTaskModal({
           setIsManuallyEdited({ date: true, time: true, repeat: true });
         }}
       />
+
+      <ConfirmationModal
+        isOpen={showDiscardConfirm}
+        onClose={() => setShowDiscardConfirm(false)}
+        onConfirm={onClose}
+        title="Discard current task?"
+        confirmLabel="Discard"
+      />
+
+      {isListDropdownOpen && dropdownCoords && (
+        <>
+          <div
+            className="list-selector-backdrop"
+            onClick={() => setIsListDropdownOpen(false)}
+          />
+          <div
+            className="list-selector-menu"
+            style={{
+              position: 'fixed',
+              left: dropdownCoords.left,
+              bottom: dropdownCoords.bottom,
+              width: dropdownCoords.width,
+              zIndex: 9999,
+              margin: 0,
+            }}
+          >
+            <div className="list-selector-menu-inner">
+              <button
+                type="button"
+                className={`list-selector-item ${selectedListId === 'toady' ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedListId('toady');
+                  setIsListDropdownOpen(false);
+                }}
+              >
+                Today
+              </button>
+              {allLists.map((list) => (
+                <button
+                  key={list.id}
+                  type="button"
+                  className={`list-selector-item ${String(selectedListId) === String(list.id) ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedListId(list.id);
+                    setIsListDropdownOpen(false);
+                  }}
+                >
+                  {list.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }

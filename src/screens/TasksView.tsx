@@ -10,6 +10,7 @@ import AddTaskModal from '../components/AddTaskModal';
 import TasksContainer from '../components/TasksContainer';
 import FloatingActionButton from '../components/FloatingActionButton';
 import { parseTask, generateSecureNumericId } from '../utils/taskHelper';
+import ConfirmationModal from '../components/ui/ConfirmationModal';
 // Import UI Design System components
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -30,10 +31,31 @@ export default function TasksView() {
   }>();
 
   const [activeListId, setActiveListId] = useState<string | number>(1001); // default to 'My Tasks' list
+  const [slideDirection, setSlideDirection] = useState<'right-to-left' | 'left-to-right' | ''>('');
+
+  const handleSwitchList = (newId: string | number) => {
+    const getListIndex = (id: string | number) => {
+      if (id === 'starred') return 0;
+      const idx = allLists.findIndex(l => String(l.id) === String(id));
+      return idx !== -1 ? idx + 1 : 0;
+    };
+    
+    const prevIdx = getListIndex(activeListId);
+    const currIdx = getListIndex(newId);
+    
+    if (currIdx > prevIdx) {
+      setSlideDirection('right-to-left');
+    } else if (currIdx < prevIdx) {
+      setSlideDirection('left-to-right');
+    }
+    
+    setActiveListId(newId);
+  };
   // Modals state
   const [isNewListOpen, setIsNewListOpen] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
+  const [listToDelete, setListToDelete] = useState<number | string | null>(null);
 
   // Relational lists and tasks
   const allLists = state.lists && state.lists.length > 0 ? state.lists : [{ id: 1001, name: 'My Tasks' }];
@@ -63,18 +85,23 @@ export default function TasksView() {
   };
 
   const handleDeleteList = (listId: number | string) => {
-    if (window.confirm('Are you sure you want to delete this list and all its tasks?')) {
-      const updatedLists = (state.lists || []).filter(l => String(l.id) !== String(listId));
-      const updatedTasks = (state.tasks || []).filter(t => String(t.listId) !== String(listId));
-      
-      const deletedIds = {
-        ...(state.deletedIds || {}),
-        lists: [...(state.deletedIds?.lists || []), listId]
-      };
-      
-      store.setState({ lists: updatedLists, tasks: updatedTasks, deletedIds });
-      setActiveListId(1001); // fallback to My Tasks
-    }
+    setListToDelete(listId);
+  };
+
+  const confirmDeleteList = () => {
+    if (!listToDelete) return;
+    const listId = listToDelete;
+    const updatedLists = (state.lists || []).filter(l => String(l.id) !== String(listId));
+    const updatedTasks = (state.tasks || []).filter(t => String(t.listId) !== String(listId));
+    
+    const deletedIds = {
+      ...(state.deletedIds || {}),
+      lists: [...(state.deletedIds?.lists || []), listId]
+    };
+    
+    store.setState({ lists: updatedLists, tasks: updatedTasks, deletedIds });
+    setActiveListId(1001); // fallback to My Tasks
+    setListToDelete(null);
   };
 
   const handleCreateTask = (taskData: {
@@ -143,7 +170,7 @@ export default function TasksView() {
         {/* Starred Tab */}
         <button
           className={`tasks-tab-item star-tab ${activeListId === 'starred' ? 'active' : ''}`}
-          onClick={() => setActiveListId('starred')}
+          onClick={() => handleSwitchList('starred')}
         >
           <IconStarFilled size={16} />
         </button>
@@ -156,7 +183,7 @@ export default function TasksView() {
             <button
               key={list.id}
               className={`tasks-tab-item ${isActive ? 'active' : ''}`}
-              onClick={() => setActiveListId(list.id)}
+              onClick={() => handleSwitchList(list.id)}
             >
               <span className="tab-name">{list.name}</span>
               {activeCount > 0 && (
@@ -185,6 +212,8 @@ export default function TasksView() {
         handleDeleteTask={handleDeleteTask}
         handleDeleteList={handleDeleteList}
         onEditTask={handleEditTask}
+        onSwitchList={handleSwitchList}
+        slideDirection={slideDirection}
       />
 
       {/* Bottom-Right Floating Action Button (FAB) */}
@@ -232,6 +261,14 @@ export default function TasksView() {
         initialListId={activeListId}
         initialStarred={activeListId === 'starred'}
         onSave={handleCreateTask}
+      />
+
+      <ConfirmationModal
+        isOpen={listToDelete !== null}
+        onClose={() => setListToDelete(null)}
+        onConfirm={confirmDeleteList}
+        title="Are you sure you want to delete this list and all its tasks?"
+        confirmLabel="Delete"
       />
     </div>
   );

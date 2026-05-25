@@ -36,26 +36,42 @@ export function Dropdown({ trigger, children, align = 'right', className = '' }:
   return (
     <div
       ref={containerRef}
-      className={`dropdown-container ${className}`}
-      style={{ position: 'relative', display: 'inline-block' }}
+      className={`dropdown-container ${className} ${isOpen ? 'open' : ''}`}
+      style={{
+        position: 'relative',
+        display: 'inline-block',
+        zIndex: isOpen ? 1000 : 'auto',
+      }}
     >
       <div onClick={toggleDropdown} style={{ display: 'inline-flex', cursor: 'pointer' }}>
         {trigger}
       </div>
       {isOpen && (
-        <div
-          className="tasks-dropdown-menu"
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            right: align === 'right' ? 0 : 'auto',
-            left: align === 'left' ? 0 : 'auto',
-            display: 'block',
-          }}
-          onClick={handleChildrenClick}
-        >
-          {children}
-        </div>
+        <>
+          <div
+            className="dropdown-backdrop"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOpen(false);
+            }}
+          />
+          <div
+            className="tasks-dropdown-menu"
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 4px)',
+              right: align === 'right' ? 0 : 'auto',
+              left: align === 'left' ? 0 : 'auto',
+              display: 'block',
+              zIndex: 999,
+            }}
+            onClick={handleChildrenClick}
+          >
+            <div className="tasks-dropdown-menu-inner">
+              {children}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

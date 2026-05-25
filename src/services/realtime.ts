@@ -85,7 +85,8 @@ export function setupRealtimeSubscription(userId: string): void {
       repeatType: row.repeat_type || 'none',
       repeatValue: repeatValStr,
       deadline: row.deadline || undefined,
-      details: row.details || undefined
+      details: row.details || undefined,
+      createdAt: row.created_at ? new Date(row.created_at).getTime() : (typeof row.id === 'number' ? Number(row.id) : Date.now())
     };
   });
 
@@ -159,11 +160,32 @@ export function setupRealtimeSubscription(userId: string): void {
   }));
 
   // 5. Subscribe to Journals
-  handleTableChange('journals', 'journals', row => ({
-    id: Number(row.id),
-    title: row.title,
-    content: row.content
-  }));
+  handleTableChange('journals', 'journals', row => {
+    let contentStr = '[]';
+    if (row.content) {
+      contentStr = typeof row.content === 'string' ? row.content : JSON.stringify(row.content);
+    }
+    let imagesArr: string[] = [];
+    if (row.images) {
+      if (Array.isArray(row.images)) {
+        imagesArr = row.images;
+      } else if (typeof row.images === 'string') {
+        try {
+          imagesArr = JSON.parse(row.images);
+        } catch {}
+      }
+    }
+    return {
+      id: Number(row.id),
+      title: row.title || '',
+      content: contentStr,
+      bookmarked: row.bookmarked || false,
+      location: row.location || '',
+      images: imagesArr,
+      created_at: row.created_at,
+      draft: row.draft || false
+    };
+  });
 
   // 6. Subscribe to Goals (requires custom split since they populate weekly, monthly, or static in state)
   realtimeChannel.on(

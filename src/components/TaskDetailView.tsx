@@ -15,6 +15,7 @@ import {
   IconPlus,
   IconCheck,
 } from '@tabler/icons-react';
+import ConfirmationModal from './ui/ConfirmationModal';
 import type { SubTask } from '../types';
 import { store } from '../services/db';
 import { parseTask, formatTaskDate, formatTaskTime, generateSecureNumericId, formatRepeatValue } from '../utils/taskHelper';
@@ -53,7 +54,8 @@ export default function TaskDetailView({
     repeatValue: '',
     deadline: '',
     details: '',
-    subtasks: []
+    subtasks: [],
+    createdAt: Date.now()
   };
 
   // Form states
@@ -80,6 +82,7 @@ export default function TaskDetailView({
 
   // Dropdowns / Modals visibility
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Conflict warning modals
   const [conflictType, setConflictType] = useState<'repeat-warning' | 'deadline-warning' | null>(null);
@@ -153,10 +156,12 @@ export default function TaskDetailView({
 
   // Delete
   const handleDelete = () => {
-    if (window.confirm('Delete this task?')) {
-      onDelete(taskId);
-      onClose();
-    }
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    onDelete(taskId);
+    onClose();
   };
 
   // Toggle Completion
@@ -418,7 +423,7 @@ export default function TaskDetailView({
                   saveTaskDetails(name, l.id);
                 }}
               >
-                {l.name}
+                <span className="dropdown-item-text">{l.name}</span>
               </DropdownItem>
             ))}
           </Dropdown>
@@ -460,6 +465,30 @@ export default function TaskDetailView({
             saveTaskDetails(e.target.value);
           }}
         />
+
+        {/* Creation Date and Time */}
+        <div 
+          className="task-detail-created-at"
+          style={{ 
+            fontSize: '12px', 
+            fontWeight: 500, 
+            color: 'var(--text3)', 
+            marginTop: '-16px', 
+            marginBottom: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px'
+          }}
+        >
+          <span>Created on {new Date(parsed.createdAt).toLocaleString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric', 
+            hour: 'numeric', 
+            minute: '2-digit', 
+            hour12: true 
+          })}</span>
+        </div>
 
         {/* Rows of settings */}
         <div className="task-detail-rows-container">
@@ -755,6 +784,14 @@ export default function TaskDetailView({
           </Button>
         </div>
       </Modal>
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="Delete this task?"
+        confirmLabel="Delete"
+      />
     </div>
     </>
   );

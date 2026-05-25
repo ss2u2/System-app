@@ -22,6 +22,8 @@ interface TasksContainerProps {
   handleDeleteTask: (taskId: number | string, e: React.MouseEvent) => void;
   handleDeleteList: (listId: number | string) => void;
   onEditTask: (id: number | string) => void;
+  onSwitchList?: (newId: string | number) => void;
+  slideDirection?: 'right-to-left' | 'left-to-right' | '';
 }
 
 export default function TasksContainer({
@@ -33,6 +35,8 @@ export default function TasksContainer({
   handleDeleteTask,
   handleDeleteList,
   onEditTask,
+  onSwitchList,
+  slideDirection = '',
 }: TasksContainerProps) {
   // Load initial sort order from localStorage, defaulting to 'myorder'
   const [sortOrder, setSortOrder] = useState<'myorder' | 'date' | 'deadline' | 'title' | 'created'>(() => {
@@ -113,7 +117,7 @@ export default function TasksContainer({
     }
 
     if (sortOrder === 'created') {
-      return [...tasksList].sort((a, b) => a.createdAt - b.createdAt);
+      return [...tasksList].sort((a, b) => b.createdAt - a.createdAt);
     }
 
     if (sortOrder === 'myorder') {
@@ -190,6 +194,7 @@ export default function TasksContainer({
         onDelete={handleDeleteTask}
         onEdit={sortOrder === 'myorder' ? undefined : onEditTask}
         isDragging={draggedId === t.id}
+        showCreationTime={sortOrder === 'created'}
       />
     </div>
   );
@@ -259,13 +264,13 @@ export default function TasksContainer({
       dateGroupsMap[dateStr].push(t);
     });
 
-    const sortedDates = Object.keys(dateGroupsMap).sort((a, b) => a.localeCompare(b));
+    const sortedDates = Object.keys(dateGroupsMap).sort((a, b) => b.localeCompare(a));
     sortedDates.forEach(dateStr => {
       groups.push({
         key: dateStr,
         title: formatTaskDate(dateStr),
         isToday: dateStr === todayDateStr,
-        tasks: dateGroupsMap[dateStr].sort((a, b) => a.createdAt - b.createdAt),
+        tasks: dateGroupsMap[dateStr].sort((a, b) => b.createdAt - a.createdAt),
       });
     });
 
@@ -279,12 +284,49 @@ export default function TasksContainer({
     };
   };
 
+  // Swipe list navigation touch handlers
+  const swipeTouchStartRef = useRef<number | null>(null);
+
+  const handleHeaderTouchStart = (e: React.TouchEvent) => {
+    swipeTouchStartRef.current = e.touches[0].clientX;
+  };
+
+  const handleHeaderTouchEnd = (e: React.TouchEvent) => {
+    if (swipeTouchStartRef.current === null) return;
+    const diff = e.changedTouches[0].clientX - swipeTouchStartRef.current;
+    
+    // Threshold of 50px for swipe navigation
+    if (Math.abs(diff) > 50) {
+      const allLists = state.lists && state.lists.length > 0 ? state.lists : [{ id: 1001, name: 'My Tasks' }];
+      const listOrder = ['starred', ...allLists.map(l => l.id)];
+      const currentIndex = listOrder.findIndex(id => String(id) === String(activeListId));
+      
+      if (diff < 0) {
+        // Swipe left -> Next list
+        if (currentIndex !== -1 && currentIndex < listOrder.length - 1) {
+          onSwitchList?.(listOrder[currentIndex + 1]);
+        }
+      } else {
+        // Swipe right -> Previous list
+        if (currentIndex !== -1 && currentIndex > 0) {
+          onSwitchList?.(listOrder[currentIndex - 1]);
+        }
+      }
+    }
+    swipeTouchStartRef.current = null;
+  };
+
   return (
-    <>
+    <div key={activeListId} className={`tasks-container-animate-wrapper ${slideDirection ? `slide-${slideDirection}` : ''}`}>
       {/* 1. Active Tasks Card */}
       <div className="tasks-card">
         {/* Card Header */}
-        <div className="tasks-card-header">
+        <div 
+          className="tasks-card-header"
+          onTouchStart={handleHeaderTouchStart}
+          onTouchEnd={handleHeaderTouchEnd}
+          style={{ cursor: 'pointer' }}
+        >
           <span className="tasks-card-title">{activeListName}</span>
           <div className="tasks-card-actions">
             
@@ -431,12 +473,13 @@ export default function TasksContainer({
                   onToggleStar={handleToggleStar}
                   onDelete={handleDeleteTask}
                   onEdit={onEditTask}
+                  showCreationTime={sortOrder === 'created'}
                 />
               ))}
             </div>
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }
