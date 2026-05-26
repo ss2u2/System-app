@@ -3975,6 +3975,7 @@ body.modal-open .diary-container {
   inset: 0;
   background-color: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -3982,6 +3983,7 @@ body.modal-open .diary-container {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.3s ease, visibility 0.3s ease;
+  isolation: isolate; /* Create new stacking context to prevent backdrop-filter bleeding artifacts */
 }
 
 .bottom-sheet-overlay.open {
@@ -3997,13 +3999,16 @@ body.modal-open .diary-container {
   display: flex;
   flex-direction: column;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
-  transform: translateY(100%);
+  transform: translateY(100%) translateZ(0); /* Force GPU rasterization */
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   padding-bottom: env(safe-area-inset-bottom);
+  backface-visibility: hidden; /* Prevent visual rendering artifacts during translation */
+  -webkit-backface-visibility: hidden;
+  background-clip: padding-box;
 }
 
 .bottom-sheet-overlay.open .bottom-sheet-content {
-  transform: translateY(0);
+  transform: translateY(0) translateZ(0);
 }
 
 /* Drag handle on top of bottom sheet */
@@ -4149,14 +4154,16 @@ body.modal-open .diary-container {
     border-radius: 24px;
     width: 90%;
     max-width: 500px;
-    transform: scale(0.9) !important;
+    transform: scale(0.9) translateZ(0) !important;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
     opacity: 0;
     padding-bottom: 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+    overflow: hidden; /* Prevent black composition corners outside rounded container on desktop */
   }
   
   .bottom-sheet-overlay.open .bottom-sheet-content {
-    transform: scale(1) !important;
+    transform: scale(1) translateZ(0) !important;
     opacity: 1;
   }
   
@@ -4166,6 +4173,11 @@ body.modal-open .diary-container {
 
   .bottom-sheet-title {
     margin-top: 28px;
+  }
+
+  .bottom-sheet-footer {
+    border-bottom-left-radius: 24px;
+    border-bottom-right-radius: 24px;
   }
 }
 

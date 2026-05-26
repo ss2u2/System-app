@@ -4,7 +4,10 @@ import {
   IconStarFilled,
   IconPlus,
   IconGripVertical,
-  IconArrowRight
+  IconArrowRight,
+  IconDotsVertical,
+  IconTrash,
+  IconPencil
 } from '@tabler/icons-react';
 import { usePointerDragReorder } from '../hooks/usePointerDragReorder';
 import { store } from '../services/db';
@@ -18,6 +21,7 @@ import ConfirmationModal from '../components/ui/ConfirmationModal';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import FormField from '../components/ui/FormField';
+import Dropdown, { DropdownItem } from '../components/ui/Dropdown';
 
 export default function TasksView() {
   const navigate = useNavigate();
@@ -134,6 +138,7 @@ export default function TasksView() {
     items: allLists,
     onReorder: handleReorderLists,
     enabled: true,
+    disableRowCursor: true,
   });
 
   // Slide down gesture to close
@@ -515,6 +520,28 @@ export default function TasksView() {
           <h3 className="bottom-sheet-title">Manage Lists</h3>
           
           <div className="bottom-sheet-body">
+            {/* 0. Static Starred List (Not Draggable) */}
+            <div className="bottom-sheet-list-item">
+              <div className="bottom-sheet-list-item-left">
+                <div className="bottom-sheet-drag-btn" style={{ cursor: 'default', color: 'var(--amber)', opacity: 1, width: '28px', marginLeft: '6px', marginRight: '6px' }}>
+                  <IconStarFilled size={18} />
+                </div>
+                <span className="bottom-sheet-list-name">Starred</span>
+              </div>
+              
+              <div className="bottom-sheet-list-item-right">
+                <button
+                  className="bottom-sheet-arrow-btn"
+                  onClick={() => {
+                    setIsListsModalOpen(false);
+                    handleSwitchList('starred');
+                  }}
+                >
+                  <IconArrowRight size={18} />
+                </button>
+              </div>
+            </div>
+
             {allLists.map((list, index) => {
               const style = getListItemStyle(list.id, index);
               const props = getListItemProps(list.id, index);
@@ -534,15 +561,37 @@ export default function TasksView() {
                     <span className="bottom-sheet-list-name">{list.name}</span>
                   </div>
                   
-                  <button
-                    className="bottom-sheet-arrow-btn"
-                    onClick={() => {
-                      setIsListsModalOpen(false);
-                      handleSwitchList(list.id);
-                    }}
-                  >
-                    <IconArrowRight size={18} />
-                  </button>
+                  <div className="bottom-sheet-list-item-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Dropdown
+                      align="right"
+                      trigger={
+                        <button className="bottom-sheet-options-btn" style={{ background: 'none', border: 'none', color: 'var(--text3)', padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                          <IconDotsVertical size={18} />
+                        </button>
+                      }
+                    >
+                      <DropdownItem onClick={() => handleOpenRenameModal(list.id)}>
+                        <IconPencil size={14} />
+                        <span>Rename List</span>
+                      </DropdownItem>
+                      {list.id !== 1001 && (
+                        <DropdownItem variant="danger" onClick={() => handleDeleteList(list.id)}>
+                          <IconTrash size={14} />
+                          <span>Delete List</span>
+                        </DropdownItem>
+                      )}
+                    </Dropdown>
+
+                    <button
+                      className="bottom-sheet-arrow-btn"
+                      onClick={() => {
+                        setIsListsModalOpen(false);
+                        handleSwitchList(list.id);
+                      }}
+                    >
+                      <IconArrowRight size={18} />
+                    </button>
+                  </div>
                 </div>
               );
             })}

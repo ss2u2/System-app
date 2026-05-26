@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { IconLogout, IconUser, IconSun, IconMoon, IconSearch, IconX } from '@tabler/icons-react';
+import { IconLogout, IconUser, IconSun, IconMoon, IconSearch, IconX, IconList } from '@tabler/icons-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -17,6 +17,10 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, signOut, loadingData } = useAuth();
   const { theme, toggleTheme } = useTheme();
+
+  const handleOpenLists = () => {
+    window.dispatchEvent(new CustomEvent('open-manage-lists'));
+  };
 
   useEffect(() => {
     const now = new Date();
@@ -133,18 +137,9 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
               </div>
             )}
 
-            {/* Center Title for Tasks Tab */}
+            {/* Center Title for Tasks Tab (Hidden on Mobile) */}
             {activeTab === 'tasks' && (
-              <div style={{
-                position: 'absolute',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                fontSize: '16px',
-                fontWeight: '700',
-                color: 'var(--text)',
-                pointerEvents: 'none',
-                letterSpacing: '0.2px',
-              }}>
+              <div className="topbar-center-title mobile-hidden">
                 Tasks
               </div>
             )}
@@ -170,7 +165,7 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* Sync indicator */}
           {loadingData && (
-            <div style={{
+            <div className="sync-indicator-wrapper" style={{
               display: 'flex', alignItems: 'center', gap: 6,
               fontSize: 11, color: 'var(--text3)',
             }}>
@@ -179,8 +174,31 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
                 background: 'var(--accent)',
                 animation: 'topbarPulse 1.2s ease-in-out infinite',
               }} />
-              Syncing…
+              <span className="mobile-hidden">Syncing…</span>
             </div>
+          )}
+
+          {/* All Lists Button - Mobile only, Tasks tab only */}
+          {activeTab === 'tasks' && (
+            <button
+              className="mobile-only all-lists-btn"
+              onClick={handleOpenLists}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '20px',
+                background: 'var(--bg3)',
+                border: '1px solid var(--border)',
+                color: 'var(--text2)',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                marginRight: '4px'
+              }}
+            >
+              <IconList size={16} />
+              <span>All Lists</span>
+            </button>
           )}
 
           {/* User avatar button */}
@@ -322,6 +340,40 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
         @keyframes menuSlideIn {
           from { opacity: 0; transform: translateY(-6px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes popIn {
+          from { opacity: 0; transform: scale(0.9); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        .topbar-center-title {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--text);
+          pointer-events: none;
+          letter-spacing: 0.2px;
+        }
+        .mobile-hidden {
+          display: block;
+        }
+        .all-lists-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .mobile-only {
+          display: none !important;
+        }
+        @media (max-width: 767px) {
+          .mobile-hidden {
+            display: none !important;
+          }
+          .mobile-only {
+            display: flex !important;
+          }
         }
       `}</style>
     </div>

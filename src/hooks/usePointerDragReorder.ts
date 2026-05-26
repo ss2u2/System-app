@@ -10,6 +10,7 @@ export interface UsePointerDragReorderProps<T extends DragItem> {
   onReorder: (draggedId: T['id'], overId: T['id']) => void;
   onEdit?: (id: T['id']) => void;
   enabled: boolean;
+  disableRowCursor?: boolean;
 }
 
 function getScrollParent(node: HTMLElement | null): HTMLElement | null {
@@ -27,6 +28,7 @@ export function usePointerDragReorder<T extends DragItem>({
   onReorder,
   onEdit,
   enabled,
+  disableRowCursor = false,
 }: UsePointerDragReorderProps<T>) {
   const [draggedId, setDraggedId] = useState<T['id'] | null>(null);
   const [overId, setOverId] = useState<T['id'] | null>(null);
@@ -470,10 +472,13 @@ export function usePointerDragReorder<T extends DragItem>({
     if (!callbacksRef.current.enabled) return {};
 
     const baseStyle: React.CSSProperties = {
-      cursor: draggedId === id ? 'grabbing' : 'grab',
       touchAction: draggedId !== null ? 'none' : 'pan-y', // Let touch devices scroll unless dragging is active
       willChange: draggedId !== null ? 'transform' : undefined,
     };
+
+    if (!disableRowCursor) {
+      baseStyle.cursor = draggedId === id ? 'grabbing' : 'grab';
+    }
 
     if (draggedId === null) return baseStyle;
 
