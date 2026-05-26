@@ -28,6 +28,7 @@ export interface Task {
   deadline?: string;
   details?: string;
   subtasks?: SubTask[];
+  orderIndex?: number;
 }
 
 export interface WeeklyGoal {
@@ -105,6 +106,7 @@ export interface AppStore {
 export interface CustomList {
   id: number | string;
   name: string;
+  orderIndex?: number;
 }
 
 export interface SubTask {
@@ -125,6 +127,7 @@ export interface CustomTask {
   deadline?: string;
   details?: string;
   subtasks?: SubTask[];
+  orderIndex?: number;
 }
 
 

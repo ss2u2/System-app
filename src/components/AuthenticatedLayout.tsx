@@ -78,13 +78,13 @@ export function AuthenticatedLayout() {
               deadline: t.deadline,
               details: t.details,
               subtasks: resetSubtasks,
-              cat: ''
+              cat: '',
+              orderIndex: t.orderIndex
             };
           }
           
           return {
             ...t,
-            repeatType: 'none',
             done: true
           };
         }

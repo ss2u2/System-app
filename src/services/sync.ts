@@ -74,7 +74,7 @@ export function triggerSync(): void {
       const currLists = state.lists || [];
       const listsToUpsert = currLists.filter(l => {
         const prev = prevLists.find(p => String(p.id) === String(l.id));
-        return !prev || prev.name !== l.name;
+        return !prev || prev.name !== l.name || prev.orderIndex !== l.orderIndex;
       });
       const listsToDelete = state.deletedIds?.lists || [];
 
@@ -96,7 +96,8 @@ export function triggerSync(): void {
           prev.repeatValue !== t.repeatValue ||
           prev.deadline !== t.deadline ||
           prev.details !== t.details ||
-          JSON.stringify(prev.subtasks) !== JSON.stringify(t.subtasks)
+          JSON.stringify(prev.subtasks) !== JSON.stringify(t.subtasks) ||
+          prev.orderIndex !== t.orderIndex
         );
       });
       const tasksToDelete = state.deletedIds?.tasks || [];
@@ -171,7 +172,7 @@ export function triggerSync(): void {
 
       // 1. Sync lists
       if (listsToUpsert.length > 0) {
-        const payloads = listsToUpsert.map(l => ({ id: l.id, user_id: userId, name: l.name }));
+        const payloads = listsToUpsert.map(l => ({ id: l.id, user_id: userId, name: l.name, order_index: l.orderIndex || 0 }));
         const { error } = await client.from('lists').upsert(payloads, { onConflict: 'id' });
         if (error) console.error('Supabase upsert error [lists]:', error.message);
         hasSynced = true;
@@ -207,7 +208,8 @@ export function triggerSync(): void {
             repeat_value: parsedRepeatValue,
             deadline: t.deadline || null,
             details: t.details || null,
-            created_at: t.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString()
+            created_at: t.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString(),
+            order_index: t.orderIndex || 0
           };
         });
         const { error } = await client.from('tasks').upsert(payloads, { onConflict: 'id' });
@@ -434,7 +436,9 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
     const newState: Partial<import('../types').AppState> = {};
 
     if (listsData) {
-      newState.lists = listsData.map((l: any) => ({ id: Number(l.id), name: l.name }));
+      newState.lists = listsData
+        .map((l: any) => ({ id: Number(l.id), name: l.name, orderIndex: l.order_index || 0 }))
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
     }
     if (tasksData) {
       newState.tasks = tasksData.map((t: any) => {
@@ -462,7 +466,8 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
             id: Number(st.id),
             name: st.name,
             done: st.done
-          }))
+          })),
+          orderIndex: t.order_index || 0
         };
       });
     }

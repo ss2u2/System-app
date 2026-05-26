@@ -425,6 +425,7 @@ function loadInitialState(): AppState {
       {id: 1002, name: 'roz'},
       {id: 1003, name: 'rr'}
     ];
+    parsed.lists = [...parsed.lists].sort((a: any, b: any) => (a.orderIndex || 0) - (b.orderIndex || 0));
     if (!parsed.deletedIds) {
       parsed.deletedIds = { tasks: [], sessions: [], goals: [], journals: [], lists: [] };
     } else {

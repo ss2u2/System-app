@@ -3,7 +3,10 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import {
   IconStarFilled,
   IconPlus,
+  IconGripVertical,
+  IconArrowRight
 } from '@tabler/icons-react';
+import { usePointerDragReorder } from '../hooks/usePointerDragReorder';
 import { store } from '../services/db';
 import type { AppState, Task } from '../types';
 import AddTaskModal from '../components/AddTaskModal';
@@ -30,6 +33,18 @@ export default function TasksView() {
     handleGlobalDeleteTask: (id: number | string) => void;
   }>();
 
+  // Relational lists and tasks
+  const allLists = state.lists && state.lists.length > 0 ? state.lists : [{ id: 1001, name: 'My Tasks' }];
+
+  const customTasks = (state.tasks || [])
+    .filter(t => t.listId !== undefined && t.listId !== null)
+    .map(t => parseTask(t));
+
+  // Calculate active task count per list
+  const getActiveCount = (listId: number | string) => {
+    return customTasks.filter(t => t.listId === listId && !t.done).length;
+  };
+
   const [activeListId, setActiveListId] = useState<string | number>(1001); // default to 'My Tasks' list
   const [slideDirection, setSlideDirection] = useState<'right-to-left' | 'left-to-right' | ''>('');
 
@@ -47,6 +62,16 @@ export default function TasksView() {
       }
     }
   }, [activeListId]);
+
+  useEffect(() => {
+    const handleOpenLists = () => {
+      setIsListsModalOpen(true);
+    };
+    window.addEventListener('open-manage-lists', handleOpenLists);
+    return () => {
+      window.removeEventListener('open-manage-lists', handleOpenLists);
+    };
+  }, []);
 
   const handleSwitchList = (newId: string | number) => {
     const getListIndex = (id: string | number) => {
@@ -74,16 +99,122 @@ export default function TasksView() {
   const [listToRename, setListToRename] = useState<number | string | null>(null);
   const [renameListName, setRenameListName] = useState('');
 
-  // Relational lists and tasks
-  const allLists = state.lists && state.lists.length > 0 ? state.lists : [{ id: 1001, name: 'My Tasks' }];
+  // Bottom Sliding Sheet State
+  const [isListsModalOpen, setIsListsModalOpen] = useState(false);
+  const [translateY, setTranslateY] = useState(0);
+  const [isDraggingSheet, setIsDraggingSheet] = useState(false);
+  const sheetStartY = useRef(0);
+  const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPressActive = useRef(false);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
 
-  const customTasks = (state.tasks || [])
-    .filter(t => t.listId !== undefined && t.listId !== null)
-    .map(t => parseTask(t));
+  // List Reordering Handlers
+  const handleReorderLists = (dragId: string | number, targetId: string | number) => {
+    const updatedLists = [...allLists];
+    const dragIdx = updatedLists.findIndex(l => String(l.id) === String(dragId));
+    const targetIdx = updatedLists.findIndex(l => String(l.id) === String(targetId));
+    if (dragIdx !== -1 && targetIdx !== -1) {
+      const [dragged] = updatedLists.splice(dragIdx, 1);
+      updatedLists.splice(targetIdx, 0, dragged);
+      
+      const reordered = updatedLists.map((l, index) => ({
+        ...l,
+        orderIndex: index
+      }));
+      
+      store.setState({ lists: reordered });
+    }
+  };
 
-  // Calculate active task count per list
-  const getActiveCount = (listId: number | string) => {
-    return customTasks.filter(t => t.listId === listId && !t.done).length;
+  const {
+    draggedId: draggedListId,
+    getItemStyle: getListItemStyle,
+    getItemProps: getListItemProps,
+  } = usePointerDragReorder({
+    items: allLists,
+    onReorder: handleReorderLists,
+    enabled: true,
+  });
+
+  // Slide down gesture to close
+  useEffect(() => {
+    if (!isDraggingSheet) return;
+
+    const handleGlobalMove = (e: TouchEvent | PointerEvent) => {
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const deltaY = clientY - sheetStartY.current;
+      if (deltaY > 0) {
+        setTranslateY(deltaY);
+      }
+    };
+
+    const handleGlobalEnd = () => {
+      setIsDraggingSheet(false);
+      if (translateY > 120) {
+        setIsListsModalOpen(false);
+      }
+      setTranslateY(0);
+    };
+
+    window.addEventListener('pointermove', handleGlobalMove);
+    window.addEventListener('pointerup', handleGlobalEnd);
+    window.addEventListener('touchmove', handleGlobalMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalEnd);
+
+    return () => {
+      window.removeEventListener('pointermove', handleGlobalMove);
+      window.removeEventListener('pointerup', handleGlobalEnd);
+      window.removeEventListener('touchmove', handleGlobalMove);
+      window.removeEventListener('touchend', handleGlobalEnd);
+    };
+  }, [isDraggingSheet, translateY]);
+
+  const handleSheetTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    sheetStartY.current = clientY;
+    setIsDraggingSheet(true);
+  };
+
+  // Long press tab to open bottom sheet
+  const startLongPress = (e: React.MouseEvent | React.TouchEvent) => {
+    // Only trigger on mobile (screen width < 768)
+    if (window.innerWidth >= 768) return;
+
+    isLongPressActive.current = false;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    touchStartPos.current = { x: clientX, y: clientY };
+
+    longPressTimeoutRef.current = setTimeout(() => {
+      isLongPressActive.current = true;
+      setIsListsModalOpen(true);
+    }, 500);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
+
+  const handleTabClick = (listId: number | string) => {
+    if (isLongPressActive.current) {
+      isLongPressActive.current = false;
+      return;
+    }
+    handleSwitchList(listId);
+  };
+
+  const handleTouchMoveTab = (e: React.TouchEvent) => {
+    if (!touchStartPos.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartPos.current.x;
+    const dy = touch.clientY - touchStartPos.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 10) {
+      cancelLongPress();
+    }
   };
 
   // Handlers
@@ -157,6 +288,12 @@ export default function TasksView() {
     deadline: string;
   }) => {
     const newTaskId = generateSecureNumericId();
+    const listTasks = (state.tasks || []).filter(t => String(t.listId) === String(taskData.listId));
+    const maxOrderIndex = listTasks.reduce((max, t) => {
+      const val = t.orderIndex !== undefined && t.orderIndex !== null ? t.orderIndex : 0;
+      return val > max ? val : max;
+    }, 0);
+
     const newTask: Task = {
       id: newTaskId,
       name: taskData.name,
@@ -171,7 +308,8 @@ export default function TasksView() {
       repeatValue: taskData.repeatValue || '',
       deadline: taskData.deadline || undefined,
       cat: '',
-      subtasks: []
+      subtasks: [],
+      orderIndex: maxOrderIndex + 1
     };
 
     store.setState({ tasks: [...(state.tasks || []), newTask] });
@@ -211,7 +349,13 @@ export default function TasksView() {
         {/* Starred Tab */}
         <button
           className={`tasks-tab-item star-tab ${activeListId === 'starred' ? 'active' : ''}`}
-          onClick={() => handleSwitchList('starred')}
+          onMouseDown={startLongPress}
+          onMouseUp={cancelLongPress}
+          onMouseLeave={cancelLongPress}
+          onTouchStart={startLongPress}
+          onTouchEnd={cancelLongPress}
+          onTouchMove={handleTouchMoveTab}
+          onClick={() => handleTabClick('starred')}
         >
           <IconStarFilled size={16} />
         </button>
@@ -224,7 +368,13 @@ export default function TasksView() {
             <button
               key={list.id}
               className={`tasks-tab-item ${isActive ? 'active' : ''}`}
-              onClick={() => handleSwitchList(list.id)}
+              onMouseDown={startLongPress}
+              onMouseUp={cancelLongPress}
+              onMouseLeave={cancelLongPress}
+              onTouchStart={startLongPress}
+              onTouchEnd={cancelLongPress}
+              onTouchMove={handleTouchMoveTab}
+              onClick={() => handleTabClick(list.id)}
             >
               <span className="tab-name">{list.name}</span>
               {activeCount > 0 && (
@@ -342,6 +492,70 @@ export default function TasksView() {
           </div>
         </form>
       </Modal>
+
+      {/* List Reordering Bottom Sheet Modal */}
+      <div
+        className={`bottom-sheet-overlay ${isListsModalOpen ? 'open' : ''}`}
+        onClick={() => setIsListsModalOpen(false)}
+      >
+        <div
+          className="bottom-sheet-content"
+          style={{ transform: translateY > 0 ? `translateY(${translateY}px)` : undefined }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Drag Handle Area */}
+          <div
+            className="bottom-sheet-drag-handle-wrapper"
+            onMouseDown={handleSheetTouchStart}
+            onTouchStart={handleSheetTouchStart}
+          >
+            <div className="bottom-sheet-drag-handle" />
+          </div>
+          
+          <h3 className="bottom-sheet-title">Manage Lists</h3>
+          
+          <div className="bottom-sheet-body">
+            {allLists.map((list, index) => {
+              const style = getListItemStyle(list.id, index);
+              const props = getListItemProps(list.id, index);
+              const isDragging = draggedListId === list.id;
+              
+              return (
+                <div
+                  key={list.id}
+                  className={`bottom-sheet-list-item ${isDragging ? 'dragging-active' : ''}`}
+                  style={style}
+                  {...props}
+                >
+                  <div className="bottom-sheet-list-item-left">
+                    <div className="bottom-sheet-drag-btn j-drag-handle">
+                      <IconGripVertical size={28} stroke={2.5} />
+                    </div>
+                    <span className="bottom-sheet-list-name">{list.name}</span>
+                  </div>
+                  
+                  <button
+                    className="bottom-sheet-arrow-btn"
+                    onClick={() => {
+                      setIsListsModalOpen(false);
+                      handleSwitchList(list.id);
+                    }}
+                  >
+                    <IconArrowRight size={18} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer with Done button */}
+          <div className="bottom-sheet-footer">
+            <button className="bottom-sheet-done-btn" onClick={() => setIsListsModalOpen(false)}>
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -9,7 +9,7 @@ import {
   IconChevronDown,
   IconCircleCheck,
 } from '@tabler/icons-react';
-import { formatTaskTime, getRelativeTimeString, parseTask, formatTaskDate } from '../utils/taskHelper';
+import { formatTaskTime, getRelativeTimeString, parseTask, formatTaskDate, getNextOccurrenceDate } from '../utils/taskHelper';
 import type { Task } from '../types';
 import { store } from '../services/db';
 import SwipableAction from './ui/SwipableAction';
@@ -147,6 +147,10 @@ export default function TaskItem({
                     } catch (e) {
                       return 'Custom';
                     }
+                  })()}
+                  {parsed.done && (() => {
+                    const nextRecur = getNextOccurrenceDate(parsed.date || '', parsed.repeatType, parsed.repeatValue);
+                    return nextRecur ? ` (Next: ${formatTaskDate(nextRecur)})` : '';
                   })()}
                 </span>
               </span>

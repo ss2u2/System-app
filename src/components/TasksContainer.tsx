@@ -74,24 +74,6 @@ export default function TasksContainer({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Helper functions for drag and drop order
-  const getTasksOrder = (listId: string | number): (number | string)[] => {
-    try {
-      const stored = localStorage.getItem(`tasks_order_${listId}`);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const saveTasksOrder = (listId: string | number, order: (number | string)[]) => {
-    try {
-      localStorage.setItem(`tasks_order_${listId}`, JSON.stringify(order));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   // Parse all tasks to CustomTask format
   const customTasks = (state.tasks || [])
     .filter(t => t.listId !== undefined && t.listId !== null)
@@ -124,19 +106,14 @@ export default function TasksContainer({
     }
 
     if (sortOrder === 'myorder') {
-      const order = getTasksOrder(activeListId);
-      const missingIds = tasksList.filter(t => !order.includes(t.id)).map(t => t.id);
-      
-      let finalOrder = order;
-      if (missingIds.length > 0) {
-        finalOrder = [...order, ...missingIds];
-        saveTasksOrder(activeListId, finalOrder);
-      }
-
-      const taskMap = new Map(tasksList.map(t => [t.id, t]));
-      return finalOrder
-        .map(id => taskMap.get(id))
-        .filter((t): t is typeof customTasks[0] => !!t);
+      return [...tasksList].sort((a, b) => {
+        const orderA = a.orderIndex !== undefined && a.orderIndex !== null ? a.orderIndex : 0;
+        const orderB = b.orderIndex !== undefined && b.orderIndex !== null ? b.orderIndex : 0;
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+        return a.createdAt - b.createdAt;
+      });
     }
 
     // fallback / default
@@ -147,29 +124,32 @@ export default function TasksContainer({
   const completedTasks = sortTasksFlat(filteredTasks.filter(t => t.done));
 
   const handleReorder = (dragId: number | string, targetId: number | string) => {
-    // 1. Update localStorage order index
-    const currentOrder = getTasksOrder(activeListId);
-    const missingIds = filteredTasks.filter(t => !currentOrder.includes(t.id)).map(t => t.id);
-    let finalOrder = [...currentOrder, ...missingIds];
+    // Reorder the active tasks list
+    const activeTasksCopy = [...activeTasks];
+    const dragIdx = activeTasksCopy.findIndex(t => String(t.id) === String(dragId));
+    const targetIdx = activeTasksCopy.findIndex(t => String(t.id) === String(targetId));
 
-    const dragIndex = finalOrder.indexOf(dragId);
-    const targetIndex = finalOrder.indexOf(targetId);
-
-    if (dragIndex !== -1 && targetIndex !== -1) {
-      finalOrder.splice(dragIndex, 1);
-      finalOrder.splice(targetIndex, 0, dragId);
-      saveTasksOrder(activeListId, finalOrder);
+    if (dragIdx !== -1 && targetIdx !== -1) {
+      const [dragged] = activeTasksCopy.splice(dragIdx, 1);
+      activeTasksCopy.splice(targetIdx, 0, dragged);
     }
 
-    // 2. Reorder array in store.tasks to sync to server
-    const storeTasks = [...(state.tasks || [])];
-    const storeDragIdx = storeTasks.findIndex(t => String(t.id) === String(dragId));
-    const storeTargetIdx = storeTasks.findIndex(t => String(t.id) === String(targetId));
-    if (storeDragIdx !== -1 && storeTargetIdx !== -1) {
-      const [dragged] = storeTasks.splice(storeDragIdx, 1);
-      storeTasks.splice(storeTargetIdx, 0, dragged);
-      store.setState({ tasks: storeTasks });
-    }
+    // Map each reordered active task ID to its new orderIndex
+    const reorderedActiveIds = new Map(activeTasksCopy.map((t, index) => [String(t.id), index]));
+
+    // Update the tasks in the global store to trigger Supabase sync
+    const updatedGlobalTasks = (state.tasks || []).map(t => {
+      const matchesList = activeListId === 'starred' ? t.starred : String(t.listId) === String(activeListId);
+      if (matchesList && !t.done) {
+        const newOrderIndex = reorderedActiveIds.get(String(t.id));
+        if (newOrderIndex !== undefined) {
+          return { ...t, orderIndex: newOrderIndex };
+        }
+      }
+      return t;
+    });
+
+    store.setState({ tasks: updatedGlobalTasks });
   };
 
   const {

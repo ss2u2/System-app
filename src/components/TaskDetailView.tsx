@@ -597,7 +597,7 @@ export default function TaskDetailView({
           </div>
 
           {/* 3.5 Repeat Row */}
-          {date && (
+          {(date || repeatType !== 'none') && (
             <div className="task-detail-row" style={{ marginTop: 4 }}>
               <div className="task-detail-row-icon">
                 <IconRepeat size={20} />

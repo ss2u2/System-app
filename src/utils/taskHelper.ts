@@ -204,6 +204,7 @@ export interface ParsedTask {
   deadline?: string;
   details?: string;
   subtasks?: SubTask[];
+  orderIndex: number;
 }
 
 export function parseTask(t: Task): ParsedTask {
@@ -220,7 +221,8 @@ export function parseTask(t: Task): ParsedTask {
     repeatValue: t.repeatValue || '',
     deadline: t.deadline || undefined,
     details: t.details || undefined,
-    subtasks: t.subtasks || []
+    subtasks: t.subtasks || [],
+    orderIndex: t.orderIndex || 0
   };
 }
 

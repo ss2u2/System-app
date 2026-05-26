@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   IconChevronLeft,
   IconChevronRight,
   IconClock,
   IconCalendar,
   IconRepeat,
-  IconChevronDown,
-  IconChevronUp
+  IconX
 } from '@tabler/icons-react';
 import { getLocalDateString, formatTaskDate, formatTaskTime, formatRepeatValue } from '../utils/taskHelper';
 
@@ -53,8 +52,10 @@ export default function CalendarPickerModal({
   const [tempRepeatType, setTempRepeatType] = useState(repeatType);
   const [tempRepeatValue, setTempRepeatValue] = useState(repeatValue);
 
-  // Accordion Expand States
-  const [expandedSection, setExpandedSection] = useState<'time' | 'deadline' | 'repeat' | null>(null);
+  // Tab & Warning States
+  const [activeTab, setActiveTab] = useState<'date' | 'deadline'>('date');
+  const [showDeadlineWarning, setShowDeadlineWarning] = useState(false);
+  const timeInputRef = useRef<HTMLInputElement>(null);
 
   // Custom Recurrence Sub-Modal States
   const [isCustomRepeatOpen, setIsCustomRepeatOpen] = useState(false);
@@ -76,9 +77,15 @@ export default function CalendarPickerModal({
       setTempDate(date);
       setTempTime(time);
       setTempDeadline(deadline);
-      setTempRepeatType(repeatType);
-      setTempRepeatValue(repeatValue);
-      setExpandedSection(null);
+      setTempRepeatType(repeatType === 'daily' ? 'custom' : repeatType);
+      
+      let initialVal = repeatValue;
+      if (repeatType === 'daily' && !repeatValue) {
+        initialVal = JSON.stringify({ every: 1, unit: 'day', ends: 'never' });
+      }
+      setTempRepeatValue(initialVal);
+      setActiveTab('date');
+      setShowDeadlineWarning(false);
 
       // Set navigated month to initial selected date or current date
       if (date) {
@@ -90,9 +97,12 @@ export default function CalendarPickerModal({
 
       // Populate custom recurrence fields
       const baseDate = date ? new Date(date + 'T00:00:00') : new Date();
-      if (repeatType === 'custom' && repeatValue) {
+      const currentRepeatType = repeatType === 'daily' ? 'custom' : repeatType;
+      const currentRepeatValue = initialVal;
+
+      if (currentRepeatType === 'custom' && currentRepeatValue) {
         try {
-          const config = JSON.parse(repeatValue);
+          const config = JSON.parse(currentRepeatValue);
           setCustomEvery(config.every || 1);
           setCustomUnit(config.unit || 'week');
           setCustomDays(config.days || []);
@@ -197,11 +207,11 @@ export default function CalendarPickerModal({
   const todayStr = getLocalDateString();
 
   const handleCellClick = (cellDateStr: string) => {
-    setTempDate(cellDateStr);
-  };
-
-  const toggleSection = (section: 'time' | 'deadline' | 'repeat') => {
-    setExpandedSection(prev => (prev === section ? null : section));
+    if (activeTab === 'deadline') {
+      setTempDeadline(cellDateStr);
+    } else {
+      setTempDate(cellDateStr);
+    }
   };
 
   const handleSave = () => {
@@ -240,6 +250,11 @@ export default function CalendarPickerModal({
       });
     }
 
+    if (tempDeadline && tempDate && tempDeadline < tempDate) {
+      setShowDeadlineWarning(true);
+      return;
+    }
+
     onSave({
       date: tempDate,
       time: finalTime,
@@ -274,6 +289,49 @@ export default function CalendarPickerModal({
     <>
       <div className="calendar-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
         <div className="calendar-picker-card">
+          
+          {/* Top selection tabs */}
+          <div className="calendar-mode-tabs" style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+            <button 
+              type="button" 
+              className={`calendar-mode-btn ${activeTab === 'date' ? 'active' : ''}`}
+              onClick={() => setActiveTab('date')}
+              style={{
+                flex: 1,
+                padding: '12px',
+                background: 'none',
+                border: 'none',
+                color: activeTab === 'date' ? 'var(--accent)' : 'var(--text3)',
+                fontWeight: activeTab === 'date' ? 700 : 500,
+                borderBottom: activeTab === 'date' ? '2px solid var(--accent)' : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                fontSize: '14px'
+              }}
+            >
+              Scheduled Date
+            </button>
+            <button 
+              type="button" 
+              className={`calendar-mode-btn ${activeTab === 'deadline' ? 'active' : ''}`}
+              onClick={() => setActiveTab('deadline')}
+              style={{
+                flex: 1,
+                padding: '12px',
+                background: 'none',
+                border: 'none',
+                color: activeTab === 'deadline' ? 'var(--red)' : 'var(--text3)',
+                fontWeight: activeTab === 'deadline' ? 700 : 500,
+                borderBottom: activeTab === 'deadline' ? '2px solid var(--red)' : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                fontSize: '14px'
+              }}
+            >
+              Deadline
+            </button>
+          </div>
+
           <div className="calendar-picker-body">
             {/* Header: Month title & paging */}
             <div className="calendar-month-header">
@@ -318,12 +376,19 @@ export default function CalendarPickerModal({
 
           <div className="calendar-divider" style={{ margin: 0 }} />
 
-          {/* Reusable Options Accordion rows */}
+          {/* Direct Option Trigger Rows */}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             
             {/* 1. Set Time Option Row */}
-            <div className="calendar-option-row">
-              <div className="calendar-option-header" onClick={() => toggleSection('time')}>
+            <div className="calendar-option-row" onClick={() => timeInputRef.current?.showPicker()} style={{ cursor: 'pointer' }}>
+              <input
+                ref={timeInputRef}
+                type="time"
+                value={tempTime}
+                onChange={(e) => setTempTime(e.target.value)}
+                style={{ display: 'none' }}
+              />
+              <div className="calendar-option-header">
                 <div className="calendar-option-header-left">
                   <div className="calendar-option-icon">
                     <IconClock size={16} />
@@ -331,69 +396,75 @@ export default function CalendarPickerModal({
                   <span>Set time</span>
                 </div>
                 <div className="calendar-option-header-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {tempTime && <span>{formatTaskTime(tempTime)}</span>}
-                  {expandedSection === 'time' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
-                </div>
-              </div>
-              {expandedSection === 'time' && (
-                <div className="calendar-option-content">
-                  <input
-                    type="time"
-                    value={tempTime}
-                    onChange={(e) => setTempTime(e.target.value)}
-                  />
-                  {tempTime && (
-                    <button
-                      type="button"
-                      className="add-btn"
-                      style={{ marginTop: 8, width: '100%', justifyContent: 'center' }}
-                      onClick={() => setTempTime('')}
-                    >
-                      Clear Time
-                    </button>
+                  {tempTime ? (
+                    <>
+                      <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{formatTaskTime(tempTime)}</span>
+                      <button
+                        type="button"
+                        className="pill-clear-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTempTime('');
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 4 }}
+                      >
+                        <IconX size={14} />
+                      </button>
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--text3)' }}>None</span>
                   )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* 2. Set Deadline Option Row */}
-            <div className="calendar-option-row">
-              <div className="calendar-option-header" onClick={() => toggleSection('deadline')}>
+            <div 
+              className="calendar-option-row" 
+              onClick={() => setActiveTab('deadline')} 
+              style={{ 
+                cursor: 'pointer',
+                backgroundColor: activeTab === 'deadline' ? 'var(--bg3)' : undefined,
+                transition: 'background-color 0.2s'
+              }}
+            >
+              <div className="calendar-option-header">
                 <div className="calendar-option-header-left">
-                  <div className="calendar-option-icon">
+                  <div className="calendar-option-icon" style={{ color: activeTab === 'deadline' ? 'var(--red)' : undefined }}>
                     <IconCalendar size={16} />
                   </div>
-                  <span>Set deadline</span>
+                  <span style={{ fontWeight: activeTab === 'deadline' ? 600 : undefined, color: activeTab === 'deadline' ? 'var(--red)' : undefined }}>Set deadline</span>
                 </div>
                 <div className="calendar-option-header-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {tempDeadline && <span>{formatTaskDate(tempDeadline)}</span>}
-                  {expandedSection === 'deadline' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
-                </div>
-              </div>
-              {expandedSection === 'deadline' && (
-                <div className="calendar-option-content">
-                  <input
-                    type="date"
-                    value={tempDeadline}
-                    onChange={(e) => setTempDeadline(e.target.value)}
-                  />
-                  {tempDeadline && (
-                    <button
-                      type="button"
-                      className="add-btn"
-                      style={{ marginTop: 8, width: '100%', justifyContent: 'center' }}
-                      onClick={() => setTempDeadline('')}
-                    >
-                      Clear Deadline
-                    </button>
+                  {tempDeadline ? (
+                    <>
+                      <span style={{ fontWeight: 600, color: 'var(--red)' }}>{formatTaskDate(tempDeadline)}</span>
+                      <button
+                        type="button"
+                        className="pill-clear-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTempDeadline('');
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', padding: 4 }}
+                      >
+                        <IconX size={14} />
+                      </button>
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--text3)' }}>Select on calendar</span>
                   )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* 3. Repeat Option Row */}
-            <div className="calendar-option-row">
-              <div className="calendar-option-header" onClick={() => toggleSection('repeat')}>
+            <div 
+              className="calendar-option-row" 
+              onClick={() => setIsCustomRepeatOpen(true)} 
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="calendar-option-header">
                 <div className="calendar-option-header-left">
                   <div className="calendar-option-icon">
                     <IconRepeat size={16} />
@@ -401,42 +472,27 @@ export default function CalendarPickerModal({
                   <span>Repeat</span>
                 </div>
                 <div className="calendar-option-header-right" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {tempRepeatType !== 'none' && <span>{getRepeatDisplayString()}</span>}
-                  {expandedSection === 'repeat' ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
-                </div>
-              </div>
-              {expandedSection === 'repeat' && (
-                <div className="calendar-option-content">
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <select
-                      value={tempRepeatType}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === 'custom') {
-                          setIsCustomRepeatOpen(true);
-                        } else {
-                          setTempRepeatType(val);
-                        }
-                      }}
-                      style={{ flex: 1 }}
-                    >
-                      <option value="none">None</option>
-                      <option value="daily">Daily</option>
-                      <option value="custom">Custom...</option>
-                    </select>
-                    {tempRepeatType === 'custom' && (
+                  {tempRepeatType !== 'none' ? (
+                    <>
+                      <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{getRepeatDisplayString()}</span>
                       <button
                         type="button"
-                        className="add-btn"
-                        style={{ padding: '9px 12px', fontWeight: 600 }}
-                        onClick={() => setIsCustomRepeatOpen(true)}
+                        className="pill-clear-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTempRepeatType('none');
+                          setTempRepeatValue('');
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', padding: 4 }}
                       >
-                        Edit Rule
+                        <IconX size={14} />
                       </button>
-                    )}
-                  </div>
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--text3)' }}>None</span>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
           </div>
@@ -779,6 +835,83 @@ export default function CalendarPickerModal({
           </div>
         </div>
       )}
+
+      {/* Date validation conflict warning modal */}
+      {showDeadlineWarning && (
+        <div className="modal-overlay open" style={{ zIndex: 13000 }}>
+          <div className="modal" style={{ width: 'auto', minWidth: '285px', maxWidth: '90vw' }}>
+            <h3 className="modal-title" style={{ marginBottom: '12px', color: 'var(--red)', fontSize: '16px', fontWeight: 700 }}>
+              Schedule the task after its deadline
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '24px', lineHeight: '1.4' }}>
+              The deadline (the date user has selected) is before then the scheduled date (the date user has selected)
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button 
+                type="button" 
+                className="btn-save" 
+                style={{ width: '100%', padding: '10px 16px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: '20px', fontWeight: 600, cursor: 'pointer' }}
+                onClick={() => {
+                  setShowDeadlineWarning(false);
+                  let finalTime = tempTime;
+                  let finalRepeatValue = tempRepeatValue;
+                  if (tempRepeatType === 'custom') {
+                    if (customTime) {
+                      finalTime = customTime;
+                    }
+                    let dayOfMonth: number | undefined = undefined;
+                    let weekday: number | undefined = undefined;
+                    let weekdayOccurrence: number | undefined = undefined;
+                    if (customUnit === 'month') {
+                      if (customMonthMode === 'day') {
+                        dayOfMonth = customDayOfMonth;
+                      } else {
+                        weekday = customWeekday;
+                        weekdayOccurrence = customWeekdayOccurrence;
+                      }
+                    }
+                    finalRepeatValue = JSON.stringify({
+                      every: customEvery,
+                      unit: customUnit,
+                      days: customUnit === 'week' ? customDays : [],
+                      ends: customEnds,
+                      endsOn: customEndsOn,
+                      endsAfter: customEndsAfter,
+                      time: customTime || undefined,
+                      monthMode: customUnit === 'month' ? customMonthMode : undefined,
+                      dayOfMonth: customUnit === 'month' && customMonthMode === 'day' ? dayOfMonth : undefined,
+                      weekday: customUnit === 'month' && customMonthMode === 'weekday' ? weekday : undefined,
+                      weekdayOccurrence: customUnit === 'month' && customMonthMode === 'weekday' ? weekdayOccurrence : undefined,
+                    });
+                  }
+                  onSave({
+                    date: tempDate,
+                    time: finalTime,
+                    deadline: tempDeadline,
+                    repeatType: tempRepeatType,
+                    repeatValue: finalRepeatValue,
+                  });
+                  onClose();
+                }}
+              >
+                Schedule anyway
+              </button>
+              <button 
+                type="button" 
+                className="btn-cancel" 
+                style={{ width: '100%', padding: '10px 16px', background: 'var(--bg3)', color: 'var(--text)', border: 'none', borderRadius: '20px', fontWeight: 600, cursor: 'pointer' }}
+                onClick={() => {
+                  setShowDeadlineWarning(false);
+                }}
+              >
+                edit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
+
+
