@@ -12,11 +12,11 @@ import {
   IconListTree,
   IconCheck,
 } from '@tabler/icons-react';
-import type { JournalBlock } from '../types';
+import type { DiaryBlock } from '../types';
 import { generateUUID } from '../utils/taskHelper';
 import { usePointerDragReorder } from '../hooks/usePointerDragReorder';
 
-interface NotionEditorProps {
+interface DiaryEditorProps {
   initialContent: string;
   onChange?: (content: string) => void;
   readOnly?: boolean;
@@ -30,8 +30,8 @@ interface SlashMenuState {
   filter: string;
 }
 
-export default function NotionEditor({ initialContent, onChange, readOnly }: NotionEditorProps) {
-  const [blocks, setBlocks] = useState<JournalBlock[]>([]);
+export default function DiaryEditor({ initialContent, onChange, readOnly }: DiaryEditorProps) {
+  const [blocks, setBlocks] = useState<DiaryBlock[]>([]);
   const [slashMenu, setSlashMenu] = useState<SlashMenuState>({
     active: false,
     x: 0,
@@ -80,7 +80,7 @@ export default function NotionEditor({ initialContent, onChange, readOnly }: Not
   }, [blocks]);
 
   // Sync back to parent
-  const updateBlocks = (newBlocks: JournalBlock[]) => {
+  const updateBlocks = (newBlocks: DiaryBlock[]) => {
     setBlocks(newBlocks);
     if (onChange) {
       isInternalUpdate.current = true;
@@ -220,7 +220,7 @@ export default function NotionEditor({ initialContent, onChange, readOnly }: Not
         newIndent = (block.indent || 0) + 1;
       }
 
-      const newBlock: JournalBlock = {
+      const newBlock: DiaryBlock = {
         id: newBlockId,
         type: newType,
         content: '',
@@ -312,7 +312,7 @@ export default function NotionEditor({ initialContent, onChange, readOnly }: Not
   const addNewBlockFloat = (index: number) => {
     if (readOnly) return;
     const newId = generateUUID();
-    const newBlock: JournalBlock = {
+    const newBlock: DiaryBlock = {
       id: newId,
       type: 'text',
       content: '',
@@ -410,7 +410,7 @@ export default function NotionEditor({ initialContent, onChange, readOnly }: Not
   const filteredItems = getFilteredMenuItems();
 
   return (
-    <div className="journal-editor" style={{ position: 'relative', width: '100%' }}>
+    <div className="diary-editor" style={{ position: 'relative', width: '100%' }}>
       {blocks.map((block, idx) => {
         if (!shouldRenderBlock(idx)) return null;
 

@@ -7,7 +7,7 @@ import AuthScreen from './components/AuthScreen';
 import DashboardView from './screens/DashboardView';
 import TasksView from './screens/TasksView';
 import ProgressView from './screens/ProgressView';
-import JournalView from './screens/JournalView';
+import DiaryView from './screens/DiaryView';
 
 // Detect Capacitor or Cordova native platform environment
 const isNativePlatform = () => {
@@ -50,12 +50,12 @@ const routes = [
             element: <ProgressView />,
           },
           {
-            path: 'journal',
-            element: <JournalView />,
+            path: 'diary',
+            element: <DiaryView />,
           },
           {
-            path: 'journal/:entryId',
-            element: <JournalView />,
+            path: 'diary/:entryId',
+            element: <DiaryView />,
           },
         ],
       },

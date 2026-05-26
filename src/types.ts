@@ -54,7 +54,7 @@ export interface StaticGoal {
   progress: number;
 }
 
-export interface JournalBlock {
+export interface DiaryBlock {
   id: string;
   type: string;
   content: string;
@@ -63,10 +63,10 @@ export interface JournalBlock {
   done?: boolean;
 }
 
-export interface JournalEntry {
+export interface DiaryEntry {
   id: number | string;
   title: string;
-  content: string; // JSON-stringified JournalBlock[]
+  content: string; // JSON-stringified DiaryBlock[]
   bookmarked?: boolean;
   location?: string;
   images?: string[];
@@ -78,7 +78,7 @@ export interface DeletedIds {
   tasks: (number | string)[];
   sessions: (number | string)[];
   goals: (number | string)[];
-  journals: (number | string)[];
+  diaries: (number | string)[];
   lists: (number | string)[];
 }
 
@@ -89,7 +89,7 @@ export interface AppState {
   weekly: WeeklyGoal[];
   monthly: MonthlyGoal[];
   static: StaticGoal[];
-  journals: JournalEntry[];
+  diaries: DiaryEntry[];
   completionHistory: Record<string, number>;
   streak: number;
   lastActiveDate: string;

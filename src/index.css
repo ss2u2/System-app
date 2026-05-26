@@ -461,8 +461,8 @@ body {
   }
 }
 
-/* --- 4. COMPONENT: JOURNAL / EDITOR --- */
-.journal-wrap {
+/* --- 4. COMPONENT: DIARY / EDITOR --- */
+.diary-wrap {
   padding: 20px 20px 20px 60px;
   flex: 1;
   display: flex;
@@ -473,7 +473,7 @@ body {
   overflow-y: auto;
 }
 
-.journal-title {
+.diary-title {
   font-family: var(--font-serif);
   font-size: 28px;
   font-weight: 700;
@@ -491,11 +491,11 @@ body {
   white-space: pre-wrap;
 }
 
-.journal-title::placeholder {
+.diary-title::placeholder {
   color: var(--text3);
 }
 
-.journal-editor {
+.diary-editor {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -882,7 +882,7 @@ body {
   font-family: 'DM Mono', monospace;
 }
 
-.journal-container {
+.diary-container {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -891,7 +891,7 @@ body {
   overflow: hidden;
 }
 
-.journal-scroll-area {
+.diary-scroll-area {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
@@ -899,8 +899,8 @@ body {
   /* Space for FAB */
 }
 
-/* Journal Floating Action Button (FAB) */
-.journal-fab {
+/* Diary Floating Action Button (FAB) */
+.diary-fab {
   position: fixed;
   bottom: calc(80px + env(safe-area-inset-bottom));
   right: 24px;
@@ -919,26 +919,26 @@ body {
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
 }
 
-[data-theme="dark"] .journal-fab {
+[data-theme="dark"] .diary-fab {
   background: var(--text);
   color: var(--bg);
 }
 
-[data-theme="light"] .journal-fab {
+[data-theme="light"] .diary-fab {
   background: var(--text);
   color: var(--bg2);
 }
 
-.journal-fab:hover {
+.diary-fab:hover {
   transform: scale(1.08) translateY(-2px);
 }
 
-.journal-fab:active {
+.diary-fab:active {
   transform: scale(0.95);
 }
 
 /* Drafts & Bookmarks List Items */
-.journal-section-title {
+.diary-section-title {
   font-size: 14px;
   font-weight: 700;
   color: var(--text2);
@@ -950,7 +950,7 @@ body {
   justify-content: space-between;
 }
 
-.journal-card-row {
+.diary-card-row {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -964,13 +964,13 @@ body {
   position: relative;
 }
 
-.journal-card-row:hover {
+.diary-card-row:hover {
   border-color: var(--border2);
   box-shadow: var(--shadow);
   transform: translateY(-1px);
 }
 
-.journal-card-left-img {
+.diary-card-left-img {
   width: 72px;
   height: 48px;
   border-radius: 8px;
@@ -978,7 +978,7 @@ body {
   flex-shrink: 0;
 }
 
-.journal-card-left-icon {
+.diary-card-left-icon {
   width: 72px;
   height: 48px;
   border-radius: 8px;
@@ -990,12 +990,12 @@ body {
   flex-shrink: 0;
 }
 
-[data-theme="dark"] .journal-card-left-icon {
+[data-theme="dark"] .diary-card-left-icon {
   background: var(--green-bg);
   color: var(--green);
 }
 
-.journal-card-info {
+.diary-card-info {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1003,13 +1003,13 @@ body {
   gap: 2px;
 }
 
-.journal-card-date {
+.diary-card-date {
   font-size: 11px;
   font-weight: 600;
   color: var(--text3);
 }
 
-.journal-card-title {
+.diary-card-title {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
@@ -1018,12 +1018,12 @@ body {
   text-overflow: ellipsis;
 }
 
-.journal-card-title.placeholder {
+.diary-card-title.placeholder {
   color: var(--text3);
   font-style: italic;
 }
 
-.journal-card-location {
+.diary-card-location {
   font-size: 11px;
   color: var(--text3);
   white-space: nowrap;
@@ -1034,7 +1034,7 @@ body {
   gap: 4px;
 }
 
-.journal-bookmark-btn {
+.diary-bookmark-btn {
   background: none;
   border: none;
   color: var(--text3);
@@ -1047,12 +1047,12 @@ body {
   transition: all 0.15s;
 }
 
-.journal-bookmark-btn:hover {
+.diary-bookmark-btn:hover {
   background: var(--bg3);
   color: var(--accent);
 }
 
-.journal-bookmark-btn.active {
+.diary-bookmark-btn.active {
   color: var(--accent);
 }
 
@@ -3246,7 +3246,7 @@ body {
 body.modal-open,
 body.modal-open .app-container,
 body.modal-open .tasks-view-container,
-body.modal-open .journal-container {
+body.modal-open .diary-container {
   overflow: hidden !important;
   height: 100vh !important;
 }

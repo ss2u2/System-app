@@ -12,7 +12,7 @@ export default function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
     { id: 'toady', label: 'Dashboard', icon: IconTarget },
     { id: 'tasks', label: 'Tasks', icon: IconClipboardList },
     { id: 'report', label: 'Progress', icon: IconChartBar },
-    { id: 'journal', label: 'Journal', icon: IconBook },
+    { id: 'diary', label: 'Diary', icon: IconBook },
   ];
 
   const handleManageListsClick = (e: React.MouseEvent) => {
