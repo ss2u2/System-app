@@ -112,7 +112,9 @@ export function triggerSync(): void {
           prev.name !== s.name ||
           prev.icon !== s.icon ||
           prev.color !== s.color ||
-          JSON.stringify(prev.steps) !== JSON.stringify(s.steps)
+          JSON.stringify(prev.steps) !== JSON.stringify(s.steps) ||
+          prev.repeatType !== s.repeatType ||
+          JSON.stringify(prev.repeatDays) !== JSON.stringify(s.repeatDays)
         );
       });
       const sessionsToDelete = state.deletedIds?.sessions || [];
@@ -250,7 +252,16 @@ export function triggerSync(): void {
 
       // 3. Sync sessions
       if (sessionsToUpsert.length > 0) {
-        const payloads = sessionsToUpsert.map(s => ({ id: s.id, user_id: userId, name: s.name, icon: s.icon, color: s.color, steps: s.steps }));
+        const payloads = sessionsToUpsert.map(s => ({
+          id: s.id,
+          user_id: userId,
+          name: s.name,
+          icon: s.icon,
+          color: s.color,
+          steps: s.steps,
+          repeat_type: s.repeatType || 'daily',
+          repeat_days: s.repeatDays || null
+        }));
         const { error } = await client.from('sessions').upsert(payloads, { onConflict: 'id' });
         if (error) console.error('Supabase upsert error [sessions]:', error.message);
         hasSynced = true;
@@ -472,7 +483,16 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
       });
     }
     if (sessionsData) {
-      newState.sessions = sessionsData.map((s: any) => ({ id: Number(s.id), name: s.name, icon: s.icon, color: s.color, steps: s.steps, open: false }));
+      newState.sessions = sessionsData.map((s: any) => ({
+        id: Number(s.id),
+        name: s.name,
+        icon: s.icon,
+        color: s.color,
+        steps: s.steps,
+        open: false,
+        repeatType: s.repeat_type || 'daily',
+        repeatDays: s.repeat_days || undefined
+      }));
     }
     if (goalsData) {
       newState.weekly = goalsData.filter((g: any) => g.type === 'weekly').map((g: any) => ({ id: Number(g.id), name: g.name, target: g.target, current: g.current }));

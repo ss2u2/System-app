@@ -457,10 +457,17 @@ function loadInitialState(): AppState {
       
       // 3. Reset daily items
       parsed.tasks = parsed.tasks.map(t => ({ ...t, done: false }));
-      parsed.sessions = parsed.sessions.map(s => ({
-        ...s,
-        steps: s.steps.map(st => ({ ...st, done: false }))
-      }));
+      const todayDayOfWeek = new Date().getDay();
+      parsed.sessions = parsed.sessions.map(s => {
+        const isScheduledToday = !s.repeatType || s.repeatType === 'daily' || (s.repeatType === 'weekly' && s.repeatDays?.includes(todayDayOfWeek));
+        if (isScheduledToday) {
+          return {
+            ...s,
+            steps: s.steps.map(st => ({ ...st, done: false, currentCount: 0 }))
+          };
+        }
+        return s;
+      });
       
       // Update date
       parsed.lastActiveDate = todayStr;

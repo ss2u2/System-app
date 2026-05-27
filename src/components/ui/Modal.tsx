@@ -6,9 +6,11 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   maxWidth?: string;
+  style?: React.CSSProperties;
+  className?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children, maxWidth = '480px' }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, maxWidth = '480px', style, className }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,8 +39,8 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = '480px' }: 
     >
       <div
         ref={modalRef}
-        className="modal"
-        style={{ maxWidth }}
+        className={`modal ${className || ''}`}
+        style={{ maxWidth, ...style }}
         role="dialog"
         aria-modal="true"
       >

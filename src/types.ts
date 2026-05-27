@@ -1,7 +1,11 @@
 export interface Step {
   name: string;
-  dur: string;
+  type?: 'timer' | 'counter' | 'checklist';
+  dur?: string;            // duration in minutes (e.g., "5")
+  targetCount?: number;     // for counters (e.g., 100)
+  currentCount?: number;    // tracks reps completed
   done: boolean;
+  taskId?: number | string; // linked general task ID
 }
 
 export interface Session {
@@ -11,6 +15,10 @@ export interface Session {
   color: string;
   steps: Step[];
   open: boolean;
+  streak?: number;
+  lastCompletedDate?: string;
+  repeatType?: 'daily' | 'weekly';
+  repeatDays?: number[]; // Days of the week: 0 = Sun, 1 = Mon, ..., 6 = Sat
 }
 
 export interface Task {
