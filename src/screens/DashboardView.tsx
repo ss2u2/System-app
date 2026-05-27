@@ -35,6 +35,7 @@ import TaskItem from '../components/TaskItem';
 import AddTaskModal from '../components/AddTaskModal';
 import { generateSecureNumericId } from '../utils/taskHelper';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
+import { useTheme } from '../context/ThemeContext';
 // Import UI Design System components
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -174,6 +175,14 @@ export default function DashboardView() {
 
   const [subTab, setSubTab] = useState<'today' | 'sessions' | 'weekly' | 'monthly' | 'static'>('today');
 
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
+  const getTextColorOnBackground = (color: string) => {
+    if (!isDark) return '#fff';
+    return ['amber', 'green', 'blue', 'pink'].includes(color) ? '#000' : '#fff';
+  };
+
   // Modals state
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [itemToDelete, setItemToDelete] = useState<{ type: 'task' | 'session'; id: number | string; name: string } | null>(null);
@@ -217,17 +226,17 @@ export default function DashboardView() {
 
   const colorMap: Record<string, string> = {
     accent: 'var(--accent)',
-    green: '#4ade80',
-    amber: '#f59e0b',
-    blue: '#60a5fa',
-    pink: '#e879f9',
+    green: 'var(--green)',
+    amber: 'var(--amber)',
+    blue: 'var(--blue)',
+    pink: 'var(--pink)',
   };
   const colorBgMap: Record<string, string> = {
     accent: 'var(--accent-bg)',
-    green: '#0d2a1a',
-    amber: '#2a1f07',
-    blue: '#0d1f3a',
-    pink: '#2a0a2e',
+    green: 'var(--green-bg)',
+    amber: 'var(--amber-bg)',
+    blue: 'var(--blue-bg)',
+    pink: 'var(--pink-bg)',
   };
 
   // Filter tasks that belong to Today dashboard (no listId or listId is 'toady')
@@ -278,8 +287,8 @@ export default function DashboardView() {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                background: 'var(--bg3)',
+                border: '1px solid var(--border)',
                 borderRadius: '10px',
                 padding: '10px 12px',
                 position: 'relative',
@@ -288,7 +297,7 @@ export default function DashboardView() {
             >
               {/* Top Row: Number, Name input, Actions */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '11px', opacity: 0.4, fontWeight: 'bold', minWidth: '16px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text3)', fontWeight: 'bold', minWidth: '16px' }}>
                   {idx + 1}
                 </span>
                 <input
@@ -306,9 +315,10 @@ export default function DashboardView() {
                     height: '32px',
                     fontSize: '12px',
                     padding: '0 8px',
-                    background: 'rgba(0,0,0,0.15)',
-                    border: '1px solid rgba(255,255,255,0.04)',
-                    borderRadius: '6px'
+                    background: 'var(--bg2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '6px',
+                    color: 'var(--text)'
                   }}
                   required
                 />
@@ -331,7 +341,7 @@ export default function DashboardView() {
                       cursor: idx === 0 ? 'default' : 'pointer',
                       background: 'none',
                       border: 'none',
-                      color: '#fff',
+                      color: 'var(--text)',
                       display: 'flex',
                       alignItems: 'center'
                     }}
@@ -354,7 +364,7 @@ export default function DashboardView() {
                       cursor: idx === customSteps.length - 1 ? 'default' : 'pointer',
                       background: 'none',
                       border: 'none',
-                      color: '#fff',
+                      color: 'var(--text)',
                       display: 'flex',
                       alignItems: 'center'
                     }}
@@ -386,7 +396,7 @@ export default function DashboardView() {
               {/* Segmented Control Row */}
               <div style={{
                 display: 'flex',
-                background: 'rgba(0,0,0,0.2)',
+                background: 'var(--bg4)',
                 padding: '2px',
                 borderRadius: '6px',
                 width: '100%',
@@ -429,7 +439,7 @@ export default function DashboardView() {
                         fontWeight: 600,
                         cursor: 'pointer',
                         background: isSelected ? colorMap[sessionColor] : 'transparent',
-                        color: isSelected ? (['amber', 'green'].includes(sessionColor) ? '#000' : '#fff') : '#fff',
+                        color: isSelected ? getTextColorOnBackground(sessionColor) : 'var(--text3)',
                         transition: 'all 0.15s',
                         display: 'flex',
                         alignItems: 'center',
@@ -466,9 +476,10 @@ export default function DashboardView() {
                         fontSize: '11px',
                         padding: '0 4px',
                         textAlign: 'center',
-                        background: 'rgba(0,0,0,0.2)',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        borderRadius: '4px'
+                        background: 'var(--bg2)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '4px',
+                        color: 'var(--text)'
                       }}
                     />
                     <span style={{ fontSize: '11px', opacity: 0.5 }}>min</span>
@@ -488,9 +499,9 @@ export default function DashboardView() {
                             fontSize: '10px',
                             padding: '2px 6px',
                             borderRadius: '4px',
-                            background: step.dur === durVal ? colorMap[sessionColor] : 'rgba(255,255,255,0.05)',
-                            color: step.dur === durVal ? (['amber', 'green'].includes(sessionColor) ? '#000' : '#fff') : '#fff',
-                            border: 'none',
+                            background: step.dur === durVal ? colorMap[sessionColor] : 'var(--bg2)',
+                            color: step.dur === durVal ? getTextColorOnBackground(sessionColor) : 'var(--text2)',
+                            border: `1px solid ${step.dur === durVal ? colorMap[sessionColor] : 'var(--border)'}`,
                             cursor: 'pointer',
                             transition: 'all 0.1s'
                           }}
@@ -522,9 +533,10 @@ export default function DashboardView() {
                         fontSize: '11px',
                         padding: '0 4px',
                         textAlign: 'center',
-                        background: 'rgba(0,0,0,0.2)',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        borderRadius: '4px'
+                        background: 'var(--bg2)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '4px',
+                        color: 'var(--text)'
                       }}
                     />
                     <span style={{ fontSize: '11px', opacity: 0.5 }}>reps</span>
@@ -544,9 +556,9 @@ export default function DashboardView() {
                             fontSize: '10px',
                             padding: '2px 6px',
                             borderRadius: '4px',
-                            background: step.targetCount === cntVal ? colorMap[sessionColor] : 'rgba(255,255,255,0.05)',
-                            color: step.targetCount === cntVal ? (['amber', 'green'].includes(sessionColor) ? '#000' : '#fff') : '#fff',
-                            border: 'none',
+                            background: step.targetCount === cntVal ? colorMap[sessionColor] : 'var(--bg2)',
+                            color: step.targetCount === cntVal ? getTextColorOnBackground(sessionColor) : 'var(--text2)',
+                            border: `1px solid ${step.targetCount === cntVal ? colorMap[sessionColor] : 'var(--border)'}`,
                             cursor: 'pointer',
                             transition: 'all 0.1s'
                           }}
@@ -583,9 +595,10 @@ export default function DashboardView() {
                         height: '26px',
                         fontSize: '11px',
                         padding: '0 8px',
-                        background: 'rgba(0,0,0,0.2)',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        borderRadius: '4px'
+                        background: 'var(--bg2)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '4px',
+                        color: 'var(--text)'
                       }}
                     >
                       <option value="">-- Standalone Step (No link) --</option>
@@ -615,7 +628,7 @@ export default function DashboardView() {
             borderRadius: '8px',
             border: `1.5px dashed color-mix(in srgb, ${colorMap[sessionColor]} 25%, transparent)`,
             background: `color-mix(in srgb, ${colorMap[sessionColor]} 3%, transparent)`,
-            color: '#fff',
+            color: 'var(--text2)',
             fontSize: '12px',
             fontWeight: 600,
             cursor: 'pointer',
@@ -629,10 +642,12 @@ export default function DashboardView() {
           onMouseEnter={(e) => {
             e.currentTarget.style.background = `color-mix(in srgb, ${colorMap[sessionColor]} 7%, transparent)`;
             e.currentTarget.style.borderColor = `color-mix(in srgb, ${colorMap[sessionColor]} 38%, transparent)`;
+            e.currentTarget.style.color = 'var(--text)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = `color-mix(in srgb, ${colorMap[sessionColor]} 3%, transparent)`;
             e.currentTarget.style.borderColor = `color-mix(in srgb, ${colorMap[sessionColor]} 25%, transparent)`;
+            e.currentTarget.style.color = 'var(--text2)';
           }}
         >
           <IconPlus size={14} /> Add Step
@@ -1636,8 +1651,8 @@ export default function DashboardView() {
                               width: '52px',
                               height: '52px',
                               borderRadius: '50%',
-                              background: colorBgMap[sessionColor] || 'rgba(255,255,255,0.05)',
-                              border: `2px solid ${colorMap[sessionColor] || 'rgba(255,255,255,0.1)'}`,
+                              background: colorBgMap[sessionColor] || 'var(--bg3)',
+                              border: `2px solid ${colorMap[sessionColor] || 'var(--border)'}`,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -1661,10 +1676,11 @@ export default function DashboardView() {
                               style={{
                                 fontSize: '15px',
                                 fontWeight: '600',
-                                background: 'rgba(255,255,255,0.03)',
-                                border: '1px solid rgba(255,255,255,0.08)',
+                                background: 'var(--bg3)',
+                                border: '1px solid var(--border)',
                                 borderRadius: '8px',
-                                padding: '10px 12px'
+                                padding: '10px 12px',
+                                color: 'var(--text)'
                               }}
                               autoFocus
                               required
@@ -1680,7 +1696,7 @@ export default function DashboardView() {
                         </span>
                         <div style={{
                           display: 'flex',
-                          background: 'rgba(255, 255, 255, 0.04)',
+                          background: 'var(--bg3)',
                           padding: '2px',
                           borderRadius: '8px',
                           width: 'fit-content'
@@ -1695,8 +1711,9 @@ export default function DashboardView() {
                               fontSize: '11px',
                               fontWeight: 600,
                               cursor: 'pointer',
-                              background: repeatType === 'daily' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                              color: repeatType === 'daily' ? '#fff' : '#aaa',
+                              background: repeatType === 'daily' ? 'var(--bg2)' : 'transparent',
+                              color: repeatType === 'daily' ? 'var(--text)' : 'var(--text3)',
+                              boxShadow: repeatType === 'daily' ? 'var(--shadow)' : 'none',
                               transition: 'all 0.15s',
                             }}
                           >
@@ -1712,8 +1729,9 @@ export default function DashboardView() {
                               fontSize: '11px',
                               fontWeight: 600,
                               cursor: 'pointer',
-                              background: repeatType === 'weekly' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                              color: repeatType === 'weekly' ? '#fff' : '#aaa',
+                              background: repeatType === 'weekly' ? 'var(--bg2)' : 'transparent',
+                              color: repeatType === 'weekly' ? 'var(--text)' : 'var(--text3)',
+                              boxShadow: repeatType === 'weekly' ? 'var(--shadow)' : 'none',
                               transition: 'all 0.15s',
                             }}
                           >
@@ -1748,12 +1766,12 @@ export default function DashboardView() {
                                     width: '28px',
                                     height: '28px',
                                     borderRadius: '6px',
-                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    border: `1px solid ${isSelected ? colorMap[sessionColor] : 'var(--border)'}`,
                                     fontSize: '11px',
                                     fontWeight: 'bold',
                                     cursor: 'pointer',
-                                    background: isSelected ? colorMap[sessionColor] : 'rgba(255, 255, 255, 0.02)',
-                                    color: isSelected ? '#000' : '#fff',
+                                    background: isSelected ? colorMap[sessionColor] : 'var(--bg3)',
+                                    color: isSelected ? getTextColorOnBackground(sessionColor) : 'var(--text2)',
                                     transition: 'all 0.15s',
                                   }}
                                 >
@@ -1785,20 +1803,22 @@ export default function DashboardView() {
                                 padding: '5px 10px',
                                 fontSize: '11px',
                                 borderRadius: '16px',
-                                background: 'rgba(255,255,255,0.04)',
-                                border: '1px solid rgba(255,255,255,0.08)',
+                                background: 'var(--bg3)',
+                                border: '1px solid var(--border)',
                                 cursor: 'pointer',
-                                color: '#fff',
+                                color: 'var(--text2)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '4px',
                                 transition: 'all 0.15s'
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                e.currentTarget.style.background = 'var(--bg4)';
+                                e.currentTarget.style.color = 'var(--text)';
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                                e.currentTarget.style.background = 'var(--bg3)';
+                                e.currentTarget.style.color = 'var(--text2)';
                               }}
                             >
                               <span>{preset.icon}</span>
@@ -1811,7 +1831,7 @@ export default function DashboardView() {
                     </div>
 
                     {/* Divider */}
-                    <div style={{ width: '1px', background: 'rgba(255,255,255,0.08)', alignSelf: 'stretch' }}></div>
+                    <div style={{ width: '1px', background: 'var(--border)', alignSelf: 'stretch' }}></div>
 
                     {/* Right Column: Steps scroll view */}
                     <div style={{ flex: 1.2, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '12px' }}>
@@ -1840,8 +1860,8 @@ export default function DashboardView() {
                             width: '48px',
                             height: '48px',
                             borderRadius: '50%',
-                            background: colorBgMap[sessionColor] || 'rgba(255,255,255,0.05)',
-                            border: `2px solid ${colorMap[sessionColor] || 'rgba(255,255,255,0.1)'}`,
+                            background: colorBgMap[sessionColor] || 'var(--bg3)',
+                            border: `2px solid ${colorMap[sessionColor] || 'var(--border)'}`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1865,10 +1885,11 @@ export default function DashboardView() {
                             style={{
                               fontSize: '14px',
                               fontWeight: '600',
-                              background: 'rgba(255,255,255,0.03)',
-                              border: '1px solid rgba(255,255,255,0.08)',
+                              background: 'var(--bg3)',
+                              border: '1px solid var(--border)',
                               borderRadius: '8px',
-                              padding: '8px 10px'
+                              padding: '8px 10px',
+                              color: 'var(--text)'
                             }}
                             autoFocus
                             required
@@ -1884,7 +1905,7 @@ export default function DashboardView() {
                       </span>
                       <div style={{
                         display: 'flex',
-                        background: 'rgba(255, 255, 255, 0.04)',
+                        background: 'var(--bg3)',
                         padding: '2px',
                         borderRadius: '8px',
                         width: 'fit-content'
@@ -1899,8 +1920,9 @@ export default function DashboardView() {
                             fontSize: '11px',
                             fontWeight: 600,
                             cursor: 'pointer',
-                            background: repeatType === 'daily' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                            color: repeatType === 'daily' ? '#fff' : '#aaa',
+                            background: repeatType === 'daily' ? 'var(--bg2)' : 'transparent',
+                            color: repeatType === 'daily' ? 'var(--text)' : 'var(--text3)',
+                            boxShadow: repeatType === 'daily' ? 'var(--shadow)' : 'none',
                             transition: 'all 0.15s',
                           }}
                         >
@@ -1916,8 +1938,9 @@ export default function DashboardView() {
                             fontSize: '11px',
                             fontWeight: 600,
                             cursor: 'pointer',
-                            background: repeatType === 'weekly' ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                            color: repeatType === 'weekly' ? '#fff' : '#aaa',
+                            background: repeatType === 'weekly' ? 'var(--bg2)' : 'transparent',
+                            color: repeatType === 'weekly' ? 'var(--text)' : 'var(--text3)',
+                            boxShadow: repeatType === 'weekly' ? 'var(--shadow)' : 'none',
                             transition: 'all 0.15s',
                           }}
                         >
@@ -1952,12 +1975,12 @@ export default function DashboardView() {
                                   width: '26px',
                                   height: '26px',
                                   borderRadius: '6px',
-                                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                                  border: `1px solid ${isSelected ? colorMap[sessionColor] : 'var(--border)'}`,
                                   fontSize: '10px',
                                   fontWeight: 'bold',
                                   cursor: 'pointer',
-                                  background: isSelected ? colorMap[sessionColor] : 'rgba(255, 255, 255, 0.02)',
-                                  color: isSelected ? '#000' : '#fff',
+                                  background: isSelected ? colorMap[sessionColor] : 'var(--bg3)',
+                                  color: isSelected ? getTextColorOnBackground(sessionColor) : 'var(--text2)',
                                   transition: 'all 0.15s',
                                 }}
                               >
@@ -1989,10 +2012,10 @@ export default function DashboardView() {
                               padding: '4px 8px',
                               fontSize: '10px',
                               borderRadius: '12px',
-                              background: 'rgba(255,255,255,0.04)',
-                              border: '1px solid rgba(255,255,255,0.08)',
+                              background: 'var(--bg3)',
+                              border: '1px solid var(--border)',
                               cursor: 'pointer',
-                              color: '#fff',
+                              color: 'var(--text2)',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '4px'
@@ -2021,7 +2044,7 @@ export default function DashboardView() {
                   width: isMobile ? 'auto' : '150px',
                   flex: isMobile ? 1.2 : 'none',
                   background: colorMap[sessionColor],
-                  color: ['amber', 'green'].includes(sessionColor) ? '#000' : '#fff',
+                  color: getTextColorOnBackground(sessionColor),
                   fontWeight: 'bold',
                 }}>
                   {editingSessionId ? 'Save Changes' : 'Create Session'}
