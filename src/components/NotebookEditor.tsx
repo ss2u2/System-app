@@ -129,6 +129,42 @@ export default function NotebookEditor({ initialContent, onChange, readOnly }: N
     };
   }, [readOnly, isRecording]);
 
+  // Handle keyboard height on mobile for floating bar
+  useEffect(() => {
+    if (readOnly) return;
+
+    const handleViewportChange = () => {
+      const visualViewport = (window as any).visualViewport;
+      if (visualViewport && bottomBarRef.current) {
+        // The distance from the layout bottom to the visual bottom is what we need to offset.
+        // This covers both the keyboard height and any 'sliding up' of the screen.
+        const bottomObscured = window.innerHeight - (visualViewport.offsetTop + visualViewport.height);
+        
+        if (bottomObscured > 20) {
+          // Keyboard is visible or screen has shifted
+          bottomBarRef.current.style.bottom = `${bottomObscured + 16}px`;
+        } else {
+          // Revert to CSS
+          bottomBarRef.current.style.bottom = '';
+        }
+      }
+    };
+
+    const visualViewport = (window as any).visualViewport;
+    if (visualViewport) {
+      visualViewport.addEventListener('resize', handleViewportChange);
+      visualViewport.addEventListener('scroll', handleViewportChange);
+      handleViewportChange();
+    }
+
+    return () => {
+      if (visualViewport) {
+        visualViewport.removeEventListener('resize', handleViewportChange);
+        visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
+    };
+  }, [readOnly]);
+
   // Sync back to parent
   const updateBlocks = (newBlocks: NotebookBlock[]) => {
     setBlocks(newBlocks);
