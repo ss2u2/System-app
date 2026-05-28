@@ -262,7 +262,8 @@ body {
 }
 
 .nav-nested-container {
-  display: none; /* Hidden on mobile bottom nav */
+  display: none;
+  /* Hidden on mobile bottom nav */
 }
 
 @media (min-width: 768px) {
@@ -282,13 +283,15 @@ body {
   }
 
   .nav-nested-container.visible {
-    max-height: 50px; /* Approximate height of one nav item */
+    max-height: 50px;
+    /* Approximate height of one nav item */
     opacity: 1;
     margin-top: 4px;
   }
 
   .nav-item.nested {
-    padding-left: 32px !important; /* Indent sub-item */
+    padding-left: 32px !important;
+    /* Indent sub-item */
     background: transparent !important;
     border-color: transparent !important;
     height: 40px;
@@ -305,7 +308,7 @@ body {
     font-size: 12px !important;
     font-weight: 500;
   }
-  
+
   .nav-item.nested:hover {
     color: var(--text);
     background: var(--bg3) !important;
@@ -461,8 +464,8 @@ body {
   }
 }
 
-/* --- 4. COMPONENT: DIARY / EDITOR --- */
-.diary-wrap {
+/* --- 4. COMPONENT: NOTEBOOK / EDITOR --- */
+.notebook-wrap {
   padding: 20px 20px 20px 60px;
   flex: 1;
   display: flex;
@@ -473,7 +476,7 @@ body {
   overflow-y: auto;
 }
 
-.diary-title {
+.notebook-title {
   font-family: var(--font-serif);
   font-size: 28px;
   font-weight: 700;
@@ -491,16 +494,15 @@ body {
   white-space: pre-wrap;
 }
 
-.diary-title::placeholder {
+.notebook-title::placeholder {
   color: var(--text3);
 }
 
-.diary-editor {
+.notebook-editor {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding-bottom: 100px;
-  padding-left: 60px;
+  padding: 0 20px 120px 20px;
 }
 
 .j-block {
@@ -882,7 +884,412 @@ body {
   font-family: 'DM Mono', monospace;
 }
 
-.diary-container {
+/* Minimalist expanding Bottom formatting and options bar */
+.notebook-editor-bottom-bar {
+  position: fixed;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
+  z-index: 999;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.notebook-editor-bottom-bar-inner {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  border-radius: 26px; /* Optimized for 40px height + padding */
+  padding: 4px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.notebook-editor-bottom-bar-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.notebook-editor-bottom-bar-inner.tab-none {
+  min-width: 180px;
+  gap: 8px;
+  justify-content: center;
+}
+
+.notebook-editor-bottom-bar-inner.tab-text,
+.notebook-editor-bottom-bar-inner.tab-block,
+.notebook-editor-bottom-bar-inner.tab-attachment {
+  gap: 6px;
+  padding-right: 8px;
+}
+
+.main-nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expanded-tab-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: slideInTab 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.1);
+}
+
+@keyframes slideInTab {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.notebook-bottom-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border2);
+  background: transparent;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.notebook-bottom-btn:hover {
+  background: var(--bg3);
+  border-color: var(--text2);
+  transform: scale(1.05);
+}
+
+.notebook-bottom-btn:active {
+  transform: scale(0.95);
+}
+
+.notebook-bottom-btn.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.notebook-tab-option-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.notebook-tab-option-btn:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.aa-label {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.format-btn-i {
+  font-style: italic;
+  font-family: var(--font-serif);
+}
+
+.format-btn-b {
+  font-weight: 800;
+}
+
+.format-btn-u {
+  text-decoration: underline;
+}
+
+.j-content i, .j-content em {
+  font-family: inherit;
+  font-style: italic;
+}
+
+.j-block[data-type="bullet"]::before {
+  content: '•';
+  position: absolute;
+  left: -18px;
+  top: 1px;
+  color: var(--text2);
+  font-size: 20px;
+}
+
+.j-block[data-type="bullet"] {
+  margin-left: 20px;
+}
+
+.notebook-todo-cb {
+  margin-right: 12px !important;
+  margin-top: 4px !important;
+}
+
+
+.notebook-bottom-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+
+.notebook-bottom-close-btn:hover {
+  background: #ef4444;
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.bar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Audio Recording UI in bottom bar */
+.recording-status-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 6px;
+}
+
+.recording-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+.recording-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+}
+
+.recording-stop-btn {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: background-color 0.15s ease;
+}
+
+.recording-stop-btn:hover {
+  background: #dc2626;
+}
+
+/* Structured Blocks Renderers */
+.j-image-block {
+  position: relative;
+  margin: 12px 0;
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.j-image-preview {
+  max-height: 280px;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.j-audio-block {
+  position: relative;
+  margin: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.j-audio-player {
+  width: 100%;
+  height: 40px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.j-block-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+}
+
+.j-image-block:hover .j-block-delete-btn,
+.j-audio-block:hover .j-block-delete-btn {
+  opacity: 1;
+}
+
+.j-block-delete-btn:hover {
+  background: #ef4444;
+  transform: scale(1.1);
+}
+
+.j-block-delete-btn-static {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: #ef4444;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.j-block-delete-btn-static:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  transform: scale(1.08);
+}
+
+.j-reminder-block {
+  margin: 10px 0;
+  width: 100%;
+  max-width: 460px;
+}
+
+.j-reminder-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.j-reminder-bell {
+  color: #f59e0b;
+  animation: bellRing 2.5s infinite ease-in-out;
+}
+
+@keyframes bellRing {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(10deg); }
+  30% { transform: rotate(-10deg); }
+  45% { transform: rotate(5deg); }
+  60% { transform: rotate(-5deg); }
+  75% { transform: rotate(0); }
+}
+
+.j-reminder-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.j-reminder-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  color: var(--text3);
+}
+
+.j-reminder-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.j-reminder-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.j-reminder-input {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.j-reminder-input:focus {
+  border-color: var(--text2);
+}
+
+.notebook-container {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -891,7 +1298,7 @@ body {
   overflow: hidden;
 }
 
-.diary-scroll-area {
+.notebook-scroll-area {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
@@ -899,8 +1306,8 @@ body {
   /* Space for FAB */
 }
 
-/* Diary Floating Action Button (FAB) */
-.diary-fab {
+/* Notebook Floating Action Button (FAB) */
+.notebook-fab {
   position: fixed;
   bottom: calc(80px + env(safe-area-inset-bottom));
   right: 24px;
@@ -919,26 +1326,26 @@ body {
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s;
 }
 
-[data-theme="dark"] .diary-fab {
+[data-theme="dark"] .notebook-fab {
   background: var(--text);
   color: var(--bg);
 }
 
-[data-theme="light"] .diary-fab {
+[data-theme="light"] .notebook-fab {
   background: var(--text);
   color: var(--bg2);
 }
 
-.diary-fab:hover {
+.notebook-fab:hover {
   transform: scale(1.08) translateY(-2px);
 }
 
-.diary-fab:active {
+.notebook-fab:active {
   transform: scale(0.95);
 }
 
 /* Drafts & Bookmarks List Items */
-.diary-section-title {
+.notebook-section-title {
   font-size: 14px;
   font-weight: 700;
   color: var(--text2);
@@ -950,7 +1357,7 @@ body {
   justify-content: space-between;
 }
 
-.diary-card-row {
+.notebook-card-row {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -964,13 +1371,13 @@ body {
   position: relative;
 }
 
-.diary-card-row:hover {
+.notebook-card-row:hover {
   border-color: var(--border2);
   box-shadow: var(--shadow);
   transform: translateY(-1px);
 }
 
-.diary-card-left-img {
+.notebook-card-left-img {
   width: 72px;
   height: 48px;
   border-radius: 8px;
@@ -978,7 +1385,7 @@ body {
   flex-shrink: 0;
 }
 
-.diary-card-left-icon {
+.notebook-card-left-icon {
   width: 72px;
   height: 48px;
   border-radius: 8px;
@@ -990,12 +1397,12 @@ body {
   flex-shrink: 0;
 }
 
-[data-theme="dark"] .diary-card-left-icon {
+[data-theme="dark"] .notebook-card-left-icon {
   background: var(--green-bg);
   color: var(--green);
 }
 
-.diary-card-info {
+.notebook-card-info {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -1003,13 +1410,13 @@ body {
   gap: 2px;
 }
 
-.diary-card-date {
+.notebook-card-date {
   font-size: 11px;
   font-weight: 600;
   color: var(--text3);
 }
 
-.diary-card-title {
+.notebook-card-title {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
@@ -1018,12 +1425,12 @@ body {
   text-overflow: ellipsis;
 }
 
-.diary-card-title.placeholder {
+.notebook-card-title.placeholder {
   color: var(--text3);
   font-style: italic;
 }
 
-.diary-card-location {
+.notebook-card-location {
   font-size: 11px;
   color: var(--text3);
   white-space: nowrap;
@@ -1034,7 +1441,7 @@ body {
   gap: 4px;
 }
 
-.diary-bookmark-btn {
+.notebook-bookmark-btn {
   background: none;
   border: none;
   color: var(--text3);
@@ -1047,12 +1454,12 @@ body {
   transition: all 0.15s;
 }
 
-.diary-bookmark-btn:hover {
+.notebook-bookmark-btn:hover {
   background: var(--bg3);
   color: var(--accent);
 }
 
-.diary-bookmark-btn.active {
+.notebook-bookmark-btn.active {
   color: var(--accent);
 }
 
@@ -1090,6 +1497,29 @@ body {
 
 .editor-meta-input::placeholder {
   color: var(--text3);
+}
+
+/* Custom styles for Notebook Editor Color and Paper pickers inside standard Dropdowns */
+.color-picker-dropdown .tasks-dropdown-menu {
+  min-width: auto;
+  overflow: visible;
+  border-radius: 12px;
+}
+
+.color-picker-dropdown .tasks-dropdown-menu-inner {
+  padding: 8px;
+  overflow: visible;
+  display: flex;
+  gap: 8px;
+}
+
+.paper-picker-dropdown .tasks-dropdown-menu {
+  min-width: 110px;
+  border-radius: 12px;
+}
+
+.paper-picker-dropdown .tasks-dropdown-menu-inner {
+  padding: 6px;
 }
 
 /* --- 5. COMPONENT: TASKS & LISTS --- */
@@ -2072,6 +2502,13 @@ body {
   flex-direction: column;
   gap: 24px;
 }
+
+
+
+.notebook-editor-body .notebook-editor {
+  padding-left: 20px;
+}
+
 
 .task-detail-title-input {
   font-size: 24px;
@@ -3247,7 +3684,7 @@ body {
 body.modal-open,
 body.modal-open .app-container,
 body.modal-open .tasks-view-container,
-body.modal-open .diary-container {
+body.modal-open .notebook-container {
   overflow: hidden !important;
   height: 100vh !important;
 }
@@ -3953,6 +4390,7 @@ body.modal-open .diary-container {
     transform: translateX(45px);
     opacity: 0.7;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -3964,6 +4402,7 @@ body.modal-open .diary-container {
     transform: translateX(-45px);
     opacity: 0.7;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -3984,7 +4423,8 @@ body.modal-open .diary-container {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.3s ease, visibility 0.3s ease;
-  isolation: isolate; /* Create new stacking context to prevent backdrop-filter bleeding artifacts */
+  isolation: isolate;
+  /* Create new stacking context to prevent backdrop-filter bleeding artifacts */
 }
 
 .bottom-sheet-overlay.open {
@@ -4000,10 +4440,12 @@ body.modal-open .diary-container {
   display: flex;
   flex-direction: column;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.15);
-  transform: translateY(100%) translateZ(0); /* Force GPU rasterization */
+  transform: translateY(100%) translateZ(0);
+  /* Force GPU rasterization */
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   padding-bottom: env(safe-area-inset-bottom);
-  backface-visibility: hidden; /* Prevent visual rendering artifacts during translation */
+  backface-visibility: hidden;
+  /* Prevent visual rendering artifacts during translation */
   -webkit-backface-visibility: hidden;
   background-clip: padding-box;
 }
@@ -4150,7 +4592,7 @@ body.modal-open .diary-container {
     justify-content: center;
     align-items: center;
   }
-  
+
   .bottom-sheet-content {
     border-radius: 24px;
     width: 90%;
@@ -4160,14 +4602,15 @@ body.modal-open .diary-container {
     opacity: 0;
     padding-bottom: 0;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
-    overflow: hidden; /* Prevent black composition corners outside rounded container on desktop */
+    overflow: hidden;
+    /* Prevent black composition corners outside rounded container on desktop */
   }
-  
+
   .bottom-sheet-overlay.open .bottom-sheet-content {
     transform: scale(1) translateZ(0) !important;
     opacity: 1;
   }
-  
+
   .bottom-sheet-drag-handle-wrapper {
     display: none;
   }
@@ -4201,8 +4644,9 @@ body.modal-open .diary-container {
     opacity: 0;
     transform: scale(0.85) translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
-}
+}

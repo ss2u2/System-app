@@ -71,7 +71,7 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
   return (
     <div className="topbar">
       <div className="content-wrapper" style={{ position: 'relative' }}>
-        {activeTab === 'diary' && searchActive ? (
+        {activeTab === 'notebook' && searchActive ? (
           <div style={{ display: 'flex', alignItems: 'center', flex: 1, marginRight: '12px' }}>
             <button
               onClick={() => {
@@ -93,7 +93,7 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
             </button>
             <input
               type="text"
-              placeholder="Search diary entries..."
+              placeholder="Search notebook entries..."
               value={searchQuery}
               onChange={(e) => onSearchChange?.(e.target.value)}
               autoFocus
@@ -112,7 +112,7 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
           </div>
         ) : (
           <>
-            {activeTab === 'diary' ? (
+            {activeTab === 'notebook' ? (
               <button
                 onClick={() => setSearchActive(true)}
                 style={{
@@ -144,8 +144,8 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
               </div>
             )}
 
-            {/* Center Title for Diary Tab */}
-            {activeTab === 'diary' && (
+            {/* Center Title for Notebook Tab */}
+            {activeTab === 'notebook' && (
               <div style={{
                 position: 'absolute',
                 left: '50%',
@@ -156,7 +156,7 @@ export default function TopBar({ onOpenSyncModal, activeTab, searchQuery = '', o
                 pointerEvents: 'none',
                 letterSpacing: '0.2px',
               }}>
-                Diary
+                Notebook
               </div>
             )}
           </>

@@ -31,8 +31,8 @@ export function AuthenticatedLayout() {
     activeTab = 'tasks';
   } else if (path.startsWith('/report')) {
     activeTab = 'report';
-  } else if (path.startsWith('/diary')) {
-    activeTab = 'diary';
+  } else if (path.startsWith('/notebook')) {
+    activeTab = 'notebook';
   }
 
   const handleGlobalToggleTask = (id: number | string) => {
@@ -143,7 +143,7 @@ export function AuthenticatedLayout() {
           if (tab === 'toady') navigate('/');
           else if (tab === 'tasks') navigate('/tasks');
           else if (tab === 'report') navigate('/report');
-          else if (tab === 'diary') navigate('/diary');
+          else if (tab === 'notebook') navigate('/notebook');
         }}
       />
 

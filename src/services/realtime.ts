@@ -159,8 +159,8 @@ export function setupRealtimeSubscription(userId: string): void {
     open: false // Default open state to false when fetched/synced
   }));
 
-  // 5. Subscribe to Diaries (maps to 'journals' table)
-  handleTableChange('journals', 'diaries', row => {
+  // 5. Subscribe to Notebooks (maps to 'journals' table)
+  handleTableChange('journals', 'notebooks', row => {
     let contentStr = '[]';
     if (row.content) {
       contentStr = typeof row.content === 'string' ? row.content : JSON.stringify(row.content);

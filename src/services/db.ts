@@ -28,7 +28,7 @@ const defaultState: AppState = {
     {id: 2002, name: 'Harsh birthday', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 4 * 365 * 24 * 3600 * 1000, done: false},
     {id: 2003, name: 'Setup IDE environment', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 5 * 24 * 3600 * 1000, done: true},
     {id: 2004, name: 'Configure supabase sync', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 4 * 24 * 3600 * 1000, done: true},
-    {id: 2005, name: 'Integrate Diary editor', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 3 * 24 * 3600 * 1000, done: true},
+    {id: 2005, name: 'Integrate Notebook editor', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 3 * 24 * 3600 * 1000, done: true},
     {id: 2006, name: 'Implement calendar goals', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 2 * 24 * 3600 * 1000, done: true},
     {id: 2007, name: 'Refactor DB caching', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 1 * 24 * 3600 * 1000, done: true},
     {id: 2008, name: 'Write documentation walkthrough', cat: '', listId: 1001, starred: false, createdAt: Date.now() - 12 * 3600 * 1000, done: true},
@@ -59,7 +59,7 @@ const defaultState: AppState = {
     {id: 3, name: 'Start my own business', emoji: '🚀', note: 'Build skills, save runway, launch by 2026', cat: 'career', progress: 20},
     {id: 4, name: 'Learn to play guitar', emoji: '🎸', note: 'Complete beginner course + 3 songs', cat: 'life', progress: 68}
   ],
-  diaries: [
+  notebooks: [
     {
       id: 20001,
       title: 'Catching butterflies in the park',
@@ -128,7 +128,7 @@ const defaultState: AppState = {
     tasks: [],
     sessions: [],
     goals: [],
-    diaries: [],
+    notebooks: [],
     lists: []
   }
 };
@@ -255,8 +255,8 @@ function migrateUuidIds(s: AppState): AppState {
     return { ...g, id: numericId };
   });
 
-  // 4. Diaries migration
-  const migratedDiaries = (s.diaries || (s as any).journals || []).map(j => {
+  // 4. Notebooks migration
+  const migratedNotebooks = (s.notebooks || (s as any).diaries || (s as any).journals || []).map(j => {
     let content = j.content;
     let contentChanged = false;
     try {
@@ -304,6 +304,9 @@ function migrateUuidIds(s: AppState): AppState {
     }
     return j;
   });
+  if ((s as any).diaries || (s as any).journals) {
+    migrated = true;
+  }
 
   // 5. Tasks migration
   const migratedTasks = (s.tasks || []).map(task => {
@@ -369,27 +372,30 @@ function migrateUuidIds(s: AppState): AppState {
       tasks: (s.deletedIds.tasks || []).map(Number).filter(n => !isNaN(n)),
       sessions: (s.deletedIds.sessions || []).map(Number).filter(n => !isNaN(n)),
       goals: (s.deletedIds.goals || []).map(Number).filter(n => !isNaN(n)),
-      diaries: (s.deletedIds.diaries || (s.deletedIds as any).journals || []).map(Number).filter(n => !isNaN(n)),
+      notebooks: (s.deletedIds.notebooks || (s.deletedIds as any).diaries || (s.deletedIds as any).journals || []).map(Number).filter(n => !isNaN(n)),
       lists: (s.deletedIds.lists || []).map(Number).filter(n => !isNaN(n))
     };
-    if (JSON.stringify(s.deletedIds) !== JSON.stringify(cleanDeleted)) {
+    if (JSON.stringify(s.deletedIds) !== JSON.stringify(cleanDeleted) || (s.deletedIds as any).diaries || (s.deletedIds as any).journals) {
       migrated = true;
     }
   }
 
   if (migrated) {
     console.log("Migrated legacy string UUIDs to secure numeric IDs for database sync compatibility.");
-    return {
+    const cleanedState: any = {
       ...s,
       lists: migratedLists,
       sessions: migratedSessions,
       weekly: migratedWeekly,
       monthly: migratedMonthly,
       static: migratedStatic,
-      diaries: migratedDiaries,
+      notebooks: migratedNotebooks,
       tasks: migratedTasks,
       deletedIds: cleanDeleted
     };
+    delete cleanedState.diaries;
+    delete cleanedState.journals;
+    return cleanedState as AppState;
   }
   return s;
 }
@@ -427,11 +433,15 @@ function loadInitialState(): AppState {
     ];
     parsed.lists = [...parsed.lists].sort((a: any, b: any) => (a.orderIndex || 0) - (b.orderIndex || 0));
     if (!parsed.deletedIds) {
-      parsed.deletedIds = { tasks: [], sessions: [], goals: [], diaries: [], lists: [] };
+      parsed.deletedIds = { tasks: [], sessions: [], goals: [], notebooks: [], lists: [] };
     } else {
       parsed.deletedIds.lists = parsed.deletedIds.lists || [];
+      if ((parsed.deletedIds as any).diaries) {
+        parsed.deletedIds.notebooks = [...(parsed.deletedIds.notebooks || []), ...(parsed.deletedIds as any).diaries];
+        delete (parsed.deletedIds as any).diaries;
+      }
       if ((parsed.deletedIds as any).journals) {
-        parsed.deletedIds.diaries = [...(parsed.deletedIds.diaries || []), ...(parsed.deletedIds as any).journals];
+        parsed.deletedIds.notebooks = [...(parsed.deletedIds.notebooks || []), ...(parsed.deletedIds as any).journals];
         delete (parsed.deletedIds as any).journals;
       }
     }

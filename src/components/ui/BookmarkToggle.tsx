@@ -13,7 +13,7 @@ export function BookmarkToggle({ checked, onToggle, size = 16, className = '', s
   return (
     <button
       type="button"
-      className={`diary-bookmark-btn ${checked ? 'active' : ''} ${className}`.trim()}
+      className={`notebook-bookmark-btn ${checked ? 'active' : ''} ${className}`.trim()}
       onClick={onToggle}
       style={style}
       aria-label={checked ? 'Remove Bookmark' : 'Add Bookmark'}

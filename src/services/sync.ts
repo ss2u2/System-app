@@ -50,11 +50,11 @@ export function triggerSync(): void {
         weekly: [],
         monthly: [],
         static: [],
-        diaries: [],
+        notebooks: [],
         completionHistory: {},
         streak: 0,
         lastActiveDate: '',
-        deletedIds: { tasks: [], sessions: [], goals: [], diaries: [], lists: [] }
+        deletedIds: { tasks: [], sessions: [], goals: [], notebooks: [], lists: [] }
       };
     }
 
@@ -143,11 +143,11 @@ export function triggerSync(): void {
       });
       const goalsToDelete = state.deletedIds?.goals || [];
 
-      // 5. Diaries
-      const prevDiaries = lastSyncedState.diaries || [];
-      const currDiaries = state.diaries || [];
-      const diariesToUpsert = currDiaries.filter(j => {
-        const prev = prevDiaries.find(p => String(p.id) === String(j.id));
+      // 5. Notebooks
+      const prevNotebooks = lastSyncedState.notebooks || [];
+      const currNotebooks = state.notebooks || [];
+      const notebooksToUpsert = currNotebooks.filter(j => {
+        const prev = prevNotebooks.find(p => String(p.id) === String(j.id));
         if (!prev) return true;
         return (
           prev.title !== j.title ||
@@ -158,7 +158,7 @@ export function triggerSync(): void {
           JSON.stringify(prev.images) !== JSON.stringify(j.images)
         );
       });
-      const diariesToDelete = state.deletedIds?.diaries || [];
+      const notebooksToDelete = state.deletedIds?.notebooks || [];
 
       // 6. Profile stats
       const prevProfile = { streak: lastSyncedState.streak, completionHistory: lastSyncedState.completionHistory, lastActiveDate: lastSyncedState.lastActiveDate };
@@ -296,9 +296,9 @@ export function triggerSync(): void {
         hasSynced = true;
       }
 
-      // 5. Sync diaries (maps to 'journals' table in DB)
-      if (diariesToUpsert.length > 0) {
-        const payloads = diariesToUpsert.map(j => {
+      // 5. Sync notebooks (maps to 'journals' table in DB)
+      if (notebooksToUpsert.length > 0) {
+        const payloads = notebooksToUpsert.map(j => {
           let parsedContent = [];
           try {
             parsedContent = typeof j.content === 'string' ? JSON.parse(j.content) : j.content;
@@ -306,7 +306,7 @@ export function triggerSync(): void {
               parsedContent = JSON.parse(parsedContent);
             }
           } catch (e) {
-            console.error("Failed to parse diary content for sync:", e);
+            console.error("Failed to parse notebook content for sync:", e);
             parsedContent = [{ id: '1', type: 'text', content: j.content || '', indent: 0 }];
           }
           return {
@@ -322,12 +322,12 @@ export function triggerSync(): void {
           };
         });
         const { error } = await client.from('journals').upsert(payloads, { onConflict: 'id' });
-        if (error) console.error('Supabase upsert error [diaries]:', error.message);
+        if (error) console.error('Supabase upsert error [notebooks]:', error.message);
         hasSynced = true;
       }
-      if (diariesToDelete.length > 0) {
-        const { error } = await client.from('journals').delete().in('id', diariesToDelete);
-        if (error) console.error('Supabase delete error [diaries]:', error.message);
+      if (notebooksToDelete.length > 0) {
+        const { error } = await client.from('journals').delete().in('id', notebooksToDelete);
+        if (error) console.error('Supabase delete error [notebooks]:', error.message);
         hasSynced = true;
       }
 
@@ -350,7 +350,7 @@ export function triggerSync(): void {
       // Reset deletedIds state locally in one single update
       if (storeRef) {
         storeRef.setState({
-          deletedIds: { tasks: [], sessions: [], goals: [], diaries: [], lists: [] }
+          deletedIds: { tasks: [], sessions: [], goals: [], notebooks: [], lists: [] }
         }, true);
       }
 
@@ -433,7 +433,7 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
       tasksData,
       sessionsData,
       goalsData,
-      diariesData,
+      notebooksData,
       profileData
     ] = await Promise.all([
       fetchTable('lists'),
@@ -499,8 +499,8 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
       newState.monthly = goalsData.filter((g: any) => g.type === 'monthly').map((g: any) => ({ id: Number(g.id), name: g.name, target: g.target, current: g.current }));
       newState.static = goalsData.filter((g: any) => g.type === 'static').map((g: any) => ({ id: Number(g.id), name: g.name, emoji: g.emoji, note: g.note, cat: g.cat, progress: g.progress }));
     }
-    if (diariesData) {
-      newState.diaries = diariesData.map((j: any) => {
+    if (notebooksData) {
+      newState.notebooks = notebooksData.map((j: any) => {
         let contentStr = '[]';
         if (j.content) {
           if (typeof j.content === 'string') {

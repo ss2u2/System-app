@@ -82,7 +82,7 @@ const PRESETS: { name: string; icon: string; color: string; steps: Step[] }[] = 
     icon: '🌙',
     color: 'accent',
     steps: [
-      { name: 'Write diary/journal', type: 'checklist', done: false },
+      { name: 'Write in notebook', type: 'checklist', done: false },
       { name: 'Read a book', type: 'timer', dur: '20', done: false },
       { name: 'Meditation', type: 'timer', dur: '10', done: false }
     ]
