@@ -13,7 +13,6 @@ import {
   IconBell,
   IconX,
   IconPalette,
-  IconChevronDown,
 } from '@tabler/icons-react';
 
 interface NotebookEditorProps {

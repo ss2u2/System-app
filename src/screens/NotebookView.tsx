@@ -7,8 +7,6 @@ import {
   IconDotsVertical,
   IconTrash,
   IconCalendar,
-  IconPalette,
-  IconChevronDown
 } from '@tabler/icons-react';
 import { useTheme } from '../context/ThemeContext';
 import NotebookEditor from '../components/NotebookEditor';
