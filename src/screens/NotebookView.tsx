@@ -250,37 +250,37 @@ export default function NotebookView() {
 
   const handleClose = () => {
     if (activeEntry) {
-      if (isEditing) {
-        const bodyText = new DOMParser()
-          .parseFromString(localContent, 'text/html')
-          .body.textContent?.trim() || '';
-        const hasMedia =
-          localContent.includes('j-image-block') ||
-          localContent.includes('j-audio-block') ||
-          localContent.includes('j-reminder-block');
-        const isEmpty = localTitle.trim() === '' && bodyText === '' && !hasMedia;
+      const bodyText = new DOMParser()
+        .parseFromString(localContent, 'text/html')
+        .body.textContent?.trim() || '';
+      const hasMedia =
+        localContent.includes('j-image-block') ||
+        localContent.includes('j-audio-block') ||
+        localContent.includes('j-reminder-block');
+      const isEmpty = localTitle.trim() === '' && bodyText === '' && !hasMedia;
 
-        if (isEmpty) {
-          // Remove empty entry completely
-          const updated = state.notebooks.filter((j) => String(j.id) !== String(activeEntry.id));
-          store.setState({ notebooks: updated });
-        } else {
-          // Save current changes as a draft
-          updateActiveEntry({
-            title: localTitle || 'Untitled Entry',
-            content: localContent,
-            draft: true
-          });
-        }
-      } else {
-        if (isEntryEmpty(activeEntry)) {
-          const updated = state.notebooks.filter((j) => String(j.id) !== String(activeEntry.id));
-          store.setState({ notebooks: updated });
-        }
+      if (isEmpty) {
+        // Remove empty entry completely
+        const updated = state.notebooks.filter((j) => String(j.id) !== String(activeEntry.id));
+        store.setState({ notebooks: updated });
       }
     }
     setIsEditing(false);
     navigate('/notebook');
+  };
+
+  const handleTitleChange = (newTitle: string) => {
+    setLocalTitle(newTitle);
+    if (activeEntry && isEditing) {
+      updateActiveEntry({ title: newTitle || 'Untitled Entry', updated_at: new Date().toISOString() });
+    }
+  };
+
+  const handleContentChange = (newContent: string) => {
+    setLocalContent(newContent);
+    if (activeEntry && isEditing) {
+      updateActiveEntry({ content: newContent, updated_at: new Date().toISOString() });
+    }
   };
 
   const formatDateTime = (dateStr?: string) => {
@@ -490,7 +490,8 @@ export default function NotebookView() {
                       updateActiveEntry({
                         title: localTitle || 'Untitled Entry',
                         content: localContent,
-                        draft: false
+                        draft: false,
+                        updated_at: new Date().toISOString()
                       });
                       setIsEditing(false);
                     }}
@@ -588,139 +589,41 @@ export default function NotebookView() {
                   <span>{formatDateTime(activeEntry.created_at)}</span>
                 </div>
 
-                {/* Theme Color Swatch Dropdown */}
-                {isEditing && (
-                  <Dropdown
-                    align="right"
-                    className="color-picker-dropdown"
-                    trigger={
-                      <button
-                        type="button"
-                        className="editor-theme-btn"
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: '50%',
-                          background: 'var(--bg3)',
-                          border: '1px solid var(--border)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'var(--text2)',
-                          transition: 'all 0.2s',
-                        }}
-                        title="Select background color"
-                      >
-                        <IconPalette size={16} />
-                      </button>
-                    }
-                  >
-                    {pastelColors.map((colorObj) => {
-                      const swatchBg = theme === 'dark' ? colorObj.darkPreview : colorObj.lightPreview;
-                      return (
-                        <button
-                          key={colorObj.name}
-                          type="button"
-                          onClick={() => {
-                            updateActiveEntry({ themeColor: colorObj.name });
-                          }}
-                          style={{
-                            width: '24px',
-                            height: '24px',
-                            borderRadius: '50%',
-                            backgroundColor: colorObj.name === 'default' ? 'var(--bg3)' : swatchBg,
-                            border: activeEntry.themeColor === colorObj.name ? '2px solid var(--text)' : '1px solid var(--border)',
-                            cursor: 'pointer',
-                            padding: 0,
-                            outline: 'none',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            position: 'relative',
-                            overflow: 'hidden',
-                            flexShrink: 0
-                          }}
-                          title={colorObj.label}
-                        >
-                          {colorObj.name === 'default' && (
-                            <div
-                              style={{
-                                width: '100%',
-                                height: '2px',
-                                backgroundColor: '#ef4444',
-                                transform: 'rotate(-45deg)'
-                              }}
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </Dropdown>
-                )}
-
-                {/* Paper Pattern Dropdown */}
-                {isEditing && (
-                  <Dropdown
-                    align="left"
-                    className="paper-picker-dropdown"
-                    trigger={
-                      <button
-                        type="button"
-                        className="editor-theme-btn"
-                        style={{
-                          height: '32px',
-                          borderRadius: '16px',
-                          background: 'var(--bg3)',
-                          border: '1px solid var(--border)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '0 12px',
-                          color: 'var(--text2)',
-                          transition: 'all 0.2s',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                        }}
-                        title="Select paper style"
-                      >
-                        <span>Paper: {activeEntry.themePattern ? activeEntry.themePattern.charAt(0).toUpperCase() + activeEntry.themePattern.slice(1) : 'Blank'}</span>
-                        <IconChevronDown size={12} />
-                      </button>
-                    }
-                  >
-                    {[
-                      { name: 'blank', label: 'Blank' },
-                      { name: 'lined', label: 'Lined' },
-                      { name: 'grid', label: 'Grid' },
-                      { name: 'dotted', label: 'Dotted' }
-                    ].map((pattern) => (
-                      <DropdownItem
-                        key={pattern.name}
-                        onClick={() => {
-                          updateActiveEntry({ themePattern: pattern.name });
-                        }}
-                        style={{
-                          background: activeEntry.themePattern === pattern.name ? 'var(--text)' : 'transparent',
-                          color: activeEntry.themePattern === pattern.name ? 'var(--bg)' : 'var(--text2)',
-                          fontWeight: activeEntry.themePattern === pattern.name ? '600' : '500',
-                        }}
-                      >
-                        {pattern.label}
-                      </DropdownItem>
-                    ))}
-                  </Dropdown>
-                )}
+                <div
+                  className="editor-meta-field"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'var(--bg3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '16px',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: 'var(--text2)',
+                    userSelect: 'none',
+                    transition: 'all 0.2s',
+                    position: 'relative'
+                  }}
+                  title="Last Edited"
+                >
+                  <IconPencil size={14} />
+                  <span>{activeEntry.updated_at ? formatDateTime(activeEntry.updated_at) : formatDateTime(activeEntry.created_at)}</span>
+                </div>
               </div>
 
               {/* Notebook Editor */}
               <NotebookEditor
                 title={localTitle}
-                onTitleChange={isEditing ? setLocalTitle : undefined}
+                onTitleChange={isEditing ? handleTitleChange : undefined}
                 initialContent={localContent}
-                onChange={isEditing ? (contentString) => setLocalContent(contentString) : undefined}
+                onChange={isEditing ? handleContentChange : undefined}
                 readOnly={!isEditing}
+                themeColor={activeEntry.themeColor || 'default'}
+                onThemeColorChange={isEditing ? (c) => updateActiveEntry({ themeColor: c, updated_at: new Date().toISOString() }) : undefined}
+                themePattern={activeEntry.themePattern || 'blank'}
+                onThemePatternChange={isEditing ? (p) => updateActiveEntry({ themePattern: p, updated_at: new Date().toISOString() }) : undefined}
               />
             </div>
 

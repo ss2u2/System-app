@@ -12,6 +12,8 @@ import {
   IconMicrophone,
   IconBell,
   IconX,
+  IconPalette,
+  IconChevronDown,
 } from '@tabler/icons-react';
 
 interface NotebookEditorProps {
@@ -20,6 +22,10 @@ interface NotebookEditorProps {
   initialContent: string;
   onChange?: (content: string) => void;
   readOnly?: boolean;
+  themeColor?: string;
+  onThemeColorChange?: (color: string) => void;
+  themePattern?: string;
+  onThemePatternChange?: (pattern: string) => void;
 }
 
 export default function NotebookEditor({
@@ -28,6 +34,10 @@ export default function NotebookEditor({
   initialContent,
   onChange,
   readOnly,
+  themeColor,
+  onThemeColorChange,
+  themePattern,
+  onThemePatternChange,
 }: NotebookEditorProps) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
@@ -35,7 +45,7 @@ export default function NotebookEditor({
   const bottomBarRef = useRef<HTMLDivElement | null>(null);
 
   // Toolbar category state
-  const [activeTab, setActiveTab] = useState<'text' | 'list' | 'attachment' | null>(null);
+  const [activeTab, setActiveTab] = useState<'text' | 'list' | 'attachment' | 'theme' | null>(null);
 
   // Format states
   const [isBold, setIsBold] = useState(false);
@@ -860,6 +870,14 @@ export default function NotebookEditor({
                 >
                   <IconPaperclip size={18} />
                 </button>
+                <button
+                  type="button"
+                  className="keep-toolbar-cat-btn"
+                  onMouseDown={(ev) => { ev.preventDefault(); ev.stopPropagation(); setActiveTab('theme'); }}
+                  title="Theme & Paper"
+                >
+                  <IconPalette size={18} />
+                </button>
               </div>
             ) : activeTab === 'text' ? (
               /* ── Expanded: Text Formatting ── */
@@ -939,6 +957,85 @@ export default function NotebookEditor({
                   <TB onPress={handleAddReminder} title="Add Reminder">
                     <IconBell size={18} />
                   </TB>
+                </div>
+
+                <button type="button" className="keep-toolbar-close" onMouseDown={handleCloseTab} title="Close">
+                  <IconX size={16} />
+                </button>
+              </div>
+            ) : activeTab === 'theme' ? (
+              /* ── Expanded: Theme & Paper ── */
+              <div className="keep-toolbar-expanded">
+                <div className="keep-toolbar-scrollable" style={{ gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Color</span>
+                    {['default', 'peach', 'cream', 'mint', 'sky', 'lavender'].map((colorName) => {
+                      // Map colorName to CSS background
+                      const bgMap: Record<string, string> = {
+                        default: 'var(--bg3)',
+                        peach: '#ffcccc',
+                        cream: '#fef08a',
+                        mint: '#bbf7d0',
+                        sky: '#bfdbfe',
+                        lavender: '#e9d5ff'
+                      };
+                      return (
+                        <button
+                          key={colorName}
+                          type="button"
+                          onMouseDown={(ev) => { ev.preventDefault(); ev.stopPropagation(); onThemeColorChange?.(colorName); }}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            backgroundColor: bgMap[colorName],
+                            border: themeColor === colorName ? '2px solid var(--text)' : '1px solid var(--border)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}
+                          title={`Color: ${colorName}`}
+                        >
+                          {colorName === 'default' && (
+                            <div style={{ width: '100%', height: '2px', backgroundColor: '#ef4444', transform: 'rotate(-45deg)' }} />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="keep-toolbar-divider" />
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Paper</span>
+                    {[
+                      { id: 'blank', label: 'None' },
+                      { id: 'lined', label: 'Lines' },
+                      { id: 'grid', label: 'Grid' },
+                      { id: 'dotted', label: 'Dots' }
+                    ].map(pattern => (
+                      <button
+                        key={pattern.id}
+                        type="button"
+                        onMouseDown={(ev) => { ev.preventDefault(); ev.stopPropagation(); onThemePatternChange?.(pattern.id); }}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: themePattern === pattern.id ? 700 : 500,
+                          backgroundColor: themePattern === pattern.id ? 'var(--text)' : 'var(--bg3)',
+                          color: themePattern === pattern.id ? 'var(--bg)' : 'var(--text2)',
+                          border: '1px solid var(--border)',
+                          cursor: 'pointer',
+                          flexShrink: 0
+                        }}
+                      >
+                        {pattern.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <button type="button" className="keep-toolbar-close" onMouseDown={handleCloseTab} title="Close">

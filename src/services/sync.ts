@@ -156,6 +156,8 @@ export function triggerSync(): void {
           prev.bookmarked !== j.bookmarked ||
           prev.location !== j.location ||
           prev.draft !== j.draft ||
+          prev.themeColor !== j.themeColor ||
+          prev.themePattern !== j.themePattern ||
           JSON.stringify(prev.images) !== JSON.stringify(j.images)
         );
       });
@@ -310,7 +312,10 @@ export function triggerSync(): void {
             location: j.location || null,
             images: Array.isArray(j.images) ? j.images : [],
             draft: j.draft || false,
-            created_at: j.created_at || new Date().toISOString()
+            theme_color: j.themeColor || 'default',
+            theme_pattern: j.themePattern || 'blank',
+            created_at: j.created_at || new Date().toISOString(),
+            updated_at: j.updated_at || new Date().toISOString()
           };
         });
         const { error } = await client.from('journals').upsert(payloads, { onConflict: 'id' });
@@ -532,7 +537,10 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
           location: j.location || '',
           images: imagesArr,
           created_at: j.created_at,
-          draft: j.draft || false
+          updated_at: j.updated_at || j.created_at,
+          draft: j.draft || false,
+          themeColor: j.theme_color || 'default',
+          themePattern: j.theme_pattern || 'blank'
         };
       });
     }

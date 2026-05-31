@@ -70,6 +70,7 @@ export interface NotebookEntry {
   location?: string;
   images?: string[];
   created_at?: string;
+  updated_at?: string;
   draft?: boolean;
   themeColor?: string;
   themePattern?: string;
