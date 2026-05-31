@@ -4691,6 +4691,23 @@ body.modal-open .notebook-container {
 }
 
 /* Reorder drag handle button */
+.bottom-sheet-drag-btn.j-drag-handle {
+  position: static !important;
+  transform: none !important;
+  width: auto !important;
+  height: auto !important;
+  opacity: 1 !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.bottom-sheet-drag-btn.j-drag-handle:hover,
+.bottom-sheet-drag-btn.j-drag-handle:active {
+  background: none !important;
+  color: var(--text) !important;
+  transform: none !important;
+}
+
 .bottom-sheet-drag-btn {
   background: none;
   border: none;

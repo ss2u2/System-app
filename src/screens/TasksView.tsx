@@ -556,7 +556,7 @@ export default function TasksView() {
                 >
                   <div className="bottom-sheet-list-item-left">
                     <div className="bottom-sheet-drag-btn j-drag-handle">
-                      <IconGripVertical size={28} stroke={2.5} />
+                      <IconGripVertical size={22} stroke={2.5} />
                     </div>
                     <span className="bottom-sheet-list-name">{list.name}</span>
                   </div>

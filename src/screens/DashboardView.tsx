@@ -33,7 +33,7 @@ import { store } from '../services/db';
 import type { AppState, Task, Session, WeeklyGoal, MonthlyGoal, StaticGoal, Step } from '../types';
 import TaskItem from '../components/TaskItem';
 import AddTaskModal from '../components/AddTaskModal';
-import { generateSecureNumericId } from '../utils/taskHelper';
+import { generateSecureNumericId, getLocalDateString } from '../utils/taskHelper';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import { useTheme } from '../context/ThemeContext';
 // Import UI Design System components
@@ -239,11 +239,89 @@ export default function DashboardView() {
     pink: 'var(--pink-bg)',
   };
 
-  // Filter tasks that belong to Today dashboard (no listId or listId is 'toady')
+  // Filter tasks that belong to Today dashboard (no listId or listId is 'toady' or date is today, or repeating today)
   const getTodayTasks = () => {
-    return (state.tasks || []).filter(
-      (t) => !t.listId || t.listId === 'toady'
-    );
+    const todayStr = getLocalDateString();
+    const todayDayOfWeek = new Date().getDay();
+    const todayDateObj = new Date();
+    
+    return (state.tasks || []).filter((t) => {
+      // 1. Unassigned / legacy today tasks
+      if (!t.listId || t.listId === 'toady') return true;
+      
+      // 2. Explicitly scheduled for today
+      if (t.date === todayStr) return true;
+      
+      // 3. Handle repeating tasks
+      if (t.repeatType && t.repeatType !== 'none') {
+        // If the task hasn't started yet, don't show it
+        if (t.date && t.date > todayStr) return false;
+
+        if (t.repeatType === 'daily') return true;
+
+        if (t.repeatType === 'custom' && t.repeatValue) {
+          try {
+            const config = JSON.parse(t.repeatValue);
+            const unit = config.unit;
+            
+            if (unit === 'week') {
+              const days: number[] = config.days || [];
+              if (days.length > 0) {
+                if (days.includes(todayDayOfWeek)) return true;
+              } else if (t.date) {
+                const baseDate = new Date(t.date + 'T00:00:00');
+                if (baseDate.getDay() === todayDayOfWeek) return true;
+              }
+            } else if (unit === 'day') {
+              const every = Number(config.every) || 1;
+              if (every === 1) return true;
+              if (t.date) {
+                 const baseDate = new Date(t.date + 'T00:00:00');
+                 // Only count from start of day to avoid timezone hour offset issues
+                 const diffTime = new Date(todayStr + 'T00:00:00').getTime() - baseDate.getTime();
+                 const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                 if (diffDays >= 0 && diffDays % every === 0) return true;
+              }
+            } else if (unit === 'month') {
+              if (config.monthMode === 'weekday') {
+                const dayOfMonth = todayDateObj.getDate();
+                const occurrence = Math.ceil(dayOfMonth / 7);
+                let reqWeekday = config.weekday;
+                let reqOccurrence = config.weekdayOccurrence;
+                if (t.date && reqWeekday === undefined) {
+                   const baseDate = new Date(t.date + 'T00:00:00');
+                   reqWeekday = baseDate.getDay();
+                   reqOccurrence = Math.ceil(baseDate.getDate() / 7);
+                }
+                if (todayDayOfWeek === reqWeekday && occurrence === reqOccurrence) return true;
+              } else {
+                let reqDay = config.dayOfMonth;
+                if (t.date && reqDay === undefined) {
+                   reqDay = new Date(t.date + 'T00:00:00').getDate();
+                }
+                if (todayDateObj.getDate() === reqDay) return true;
+              }
+            } else if (unit === 'year') {
+              if (t.date) {
+                const baseDate = new Date(t.date + 'T00:00:00');
+                if (baseDate.getMonth() === todayDateObj.getMonth() && baseDate.getDate() === todayDateObj.getDate()) return true;
+              }
+            }
+          } catch(e) {
+            // ignore JSON parse errors
+          }
+        }
+      }
+      return false;
+    }).sort((a, b) => {
+      if (a.done === b.done) {
+        const orderA = a.orderIndex || 0;
+        const orderB = b.orderIndex || 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.createdAt || 0) - (b.createdAt || 0);
+      }
+      return a.done ? 1 : -1;
+    });
   };
 
   // Filter sessions scheduled for today
@@ -1311,6 +1389,7 @@ export default function DashboardView() {
                     onToggleStar={handleToggleStar}
                     onDelete={handleDeleteTask}
                     onEdit={handleEditTask}
+                    hideOnToggle={false}
                   />
                 ))
               ) : (

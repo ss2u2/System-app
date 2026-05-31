@@ -11,6 +11,7 @@ export interface UsePointerDragReorderProps<T extends DragItem> {
   onEdit?: (id: T['id']) => void;
   enabled: boolean;
   disableRowCursor?: boolean;
+  requireDragHandle?: boolean;
 }
 
 function getScrollParent(node: HTMLElement | null): HTMLElement | null {
@@ -29,6 +30,7 @@ export function usePointerDragReorder<T extends DragItem>({
   onEdit,
   enabled,
   disableRowCursor = false,
+  requireDragHandle = false,
 }: UsePointerDragReorderProps<T>) {
   const [draggedId, setDraggedId] = useState<T['id'] | null>(null);
   const [overId, setOverId] = useState<T['id'] | null>(null);
@@ -139,9 +141,9 @@ export function usePointerDragReorder<T extends DragItem>({
     const target = e.target as HTMLElement;
     const draggedRow = e.currentTarget;
 
-    // Enforce that dragging only starts from the drag handle
+    // Enforce that dragging only starts from the drag handle if required
     const isDragHandle = !!target.closest('.j-drag-handle');
-    if (!isDragHandle) {
+    if (requireDragHandle && !isDragHandle) {
       return;
     }
 

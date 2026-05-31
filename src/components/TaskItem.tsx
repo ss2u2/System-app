@@ -22,6 +22,7 @@ interface TaskItemProps {
   onEdit?: (id: number | string) => void;
   isDragging?: boolean;
   showCreationTime?: boolean;
+  hideOnToggle?: boolean;
 }
 
 export default function TaskItem({
@@ -32,6 +33,7 @@ export default function TaskItem({
   onEdit,
   isDragging,
   showCreationTime = false,
+  hideOnToggle = true,
 }: TaskItemProps) {
   const parsed = parseTask(task);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -60,16 +62,20 @@ export default function TaskItem({
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!parsed.done) {
-      setAnimatingDirection('up');
-      setTimeout(() => {
-        onToggle(parsed.id);
-      }, 350); 
+    if (hideOnToggle) {
+      if (!parsed.done) {
+        setAnimatingDirection('up');
+        setTimeout(() => {
+          onToggle(parsed.id);
+        }, 350); 
+      } else {
+        setAnimatingDirection('down');
+        setTimeout(() => {
+          onToggle(parsed.id);
+        }, 350);
+      }
     } else {
-      setAnimatingDirection('down');
-      setTimeout(() => {
-        onToggle(parsed.id);
-      }, 350);
+      onToggle(parsed.id);
     }
   };
 
