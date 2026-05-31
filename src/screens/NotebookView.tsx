@@ -142,7 +142,8 @@ const isEntryEmpty = (entry: NotebookEntry): boolean => {
     body.includes('j-image-block') ||
     body.includes('j-audio-block') ||
     body.includes('j-reminder-block');
-  return title.trim() === '' && bodyText === '' && !hasMedia;
+  const isTitleEmpty = title.trim() === '' || title === 'Untitled Entry';
+  return isTitleEmpty && bodyText === '' && !hasMedia;
 };
 
 export default function NotebookView() {
@@ -162,6 +163,20 @@ export default function NotebookView() {
   const activeEntry = state.notebooks.find((j) => String(j.id) === String(entryId));
 
   const lastLoadedIdRef = useRef<number | string | null>(null);
+  const previousEntryIdRef = useRef<string | null>(null);
+
+  /* ─── Cleanup empty entries when navigating away ─── */
+  useEffect(() => {
+    const prevId = previousEntryIdRef.current;
+    if (prevId && prevId !== entryId) {
+      const prevEntry = store.getState().notebooks.find(j => String(j.id) === String(prevId));
+      if (prevEntry && isEntryEmpty(prevEntry)) {
+        const updated = store.getState().notebooks.filter(j => String(j.id) !== String(prevId));
+        store.setState({ notebooks: updated });
+      }
+    }
+    previousEntryIdRef.current = entryId || null;
+  }, [entryId]);
 
   /* ─── Load entry title & content (with backward compat) ─── */
   useEffect(() => {
