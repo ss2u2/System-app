@@ -1,28 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
 import AppContainer from './AppContainer';
 import SyncConfig from './SyncConfig';
 import TaskDetailView from './TaskDetailView';
+import { useAppState } from '../hooks/useAppState';
 import { store } from '../services/db';
-import type { AppState, Task } from '../types';
+import type { Task } from '../types';
 import { getLocalDateString, getNextOccurrenceDate, generateSecureNumericId } from '../utils/taskHelper';
 
 export function AuthenticatedLayout() {
-  const [state, setState] = useState<AppState>(store.getState());
+  const state = useAppState(s => s);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const location = useLocation();
   const navigate = useNavigate();
   const { taskId } = useParams();
 
-  useEffect(() => {
-    const unsubscribe = store.subscribe((newState) => {
-      setState({ ...newState });
-    });
-    return unsubscribe;
-  }, []);
 
   // Determine active tab based on route pathname
   const path = location.pathname;

@@ -291,3 +291,61 @@ export const formatRepeatValue = (repeatType: string, repeatValue: string, taskT
   }
   return '';
 };
+
+export interface LegacyNotebookBlock {
+  id: string;
+  type: string;
+  content: string;
+  indent?: number;
+  collapsed?: boolean;
+  done?: boolean;
+}
+
+export const convertBlocksToHtml = (rawBlocks: LegacyNotebookBlock[]): string => {
+  let html = '';
+  let i = 0;
+
+  const parseBlockToHtml = (b: LegacyNotebookBlock): string => {
+    if (b.type === 'h1') return `<h1>${b.content || ''}</h1>`;
+    if (b.type === 'h2') return `<h2>${b.content || ''}</h2>`;
+    if (b.type === 'h3') return `<h3>${b.content || ''}</h3>`;
+    if (b.type === 'bullet') return `<ul><li>${b.content || ''}</li></ul>`;
+    if (b.type === 'number') return `<ol><li>${b.content || ''}</li></ol>`;
+    if (b.type === 'todo') {
+      const checkedClass = b.done ? 'done' : '';
+      const checkedSvg = b.done 
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="tabler-icon tabler-icon-check"><path d="M5 12l5 5l10 -10"></path></svg>'
+        : '<div class="checkbox-inner"></div>';
+      return `<ul class="todo-list"><li class="todo-item-line ${checkedClass}"><span class="custom-task-checkbox notebook-todo-cb ${checkedClass}" contenteditable="false">${checkedSvg}</span>&nbsp;${b.content || ''}</li></ul>`;
+    }
+    if (b.type === 'text') {
+      if (!b.content) return '<div><br></div>';
+      const trimmed = b.content.trim();
+      if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+        return b.content;
+      }
+      return `<div>${b.content}</div>`;
+    }
+    if (b.type === 'image') {
+      return `<div class="j-image-block" contenteditable="false"><img src="${b.content}" alt="Attachment" class="j-image-preview" /><button type="button" class="j-block-delete-btn" title="Delete image"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg></button></div>`;
+    }
+    if (b.type === 'audio') {
+      return `<div class="j-audio-block" contenteditable="false"><audio src="${b.content}" controls class="j-audio-player" /><button type="button" class="j-block-delete-btn" title="Delete voice note"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg></button></div>`;
+    }
+    if (b.type === 'reminder') {
+      const formattedDate = b.content ? new Date(b.content).toLocaleString() : 'No date set';
+      return `<div class="j-reminder-block" contenteditable="false" data-reminder="${b.content || ''}"><div class="j-reminder-card"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="j-reminder-bell"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3H4a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6" /><path d="M9 17a3 3 0 0 0 6 0" /></svg><div class="j-reminder-info"><div class="j-reminder-label">Reminder Set</div><div class="j-reminder-time">${formattedDate}</div></div><div class="j-reminder-actions"><input type="datetime-local" class="j-reminder-input" value="${b.content || ''}" /><button type="button" class="j-block-delete-btn-static" title="Delete reminder"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg></button></div></div></div>`;
+    }
+    if (b.type === 'toc') {
+      return `<div class="j-toc-block" contenteditable="false"><div class="j-toc-wrapper"><div class="j-toc-title">Table of Contents</div><div class="j-toc-inner"><span style="color: var(--text3); font-size: 12px;">Table of Contents</span></div></div></div>`;
+    }
+    return `<div>${b.content || ''}</div>`;
+  };
+
+  while (i < rawBlocks.length) {
+    html += parseBlockToHtml(rawBlocks[i]);
+    i++;
+  }
+
+  return html;
+};

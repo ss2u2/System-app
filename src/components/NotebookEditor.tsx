@@ -1,466 +1,669 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  IconCaretRightFilled,
   IconTextSize,
-  IconH1,
-  IconH2,
-  IconH3,
   IconSquareCheck,
   IconList,
-  IconListTree,
-  IconCheck,
-  IconGridDots,
-  IconTrash,
+  IconListNumbers,
   IconPaperclip,
+  IconAlignLeft,
+  IconAlignCenter,
+  IconAlignRight,
   IconPhoto,
   IconMicrophone,
   IconBell,
   IconX,
-  IconPlus,
 } from '@tabler/icons-react';
-import type { NotebookBlock } from '../types';
-import { generateUUID } from '../utils/taskHelper';
 
 interface NotebookEditorProps {
+  title: string;
+  onTitleChange?: (title: string) => void;
   initialContent: string;
   onChange?: (content: string) => void;
   readOnly?: boolean;
 }
 
-interface SlashMenuState {
-  active: boolean;
-  x: number;
-  y: number;
-  blockIndex: number | null;
-  filter: string;
-}
+export default function NotebookEditor({
+  title,
+  onTitleChange,
+  initialContent,
+  onChange,
+  readOnly,
+}: NotebookEditorProps) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const titleRef = useRef<HTMLTextAreaElement | null>(null);
+  const isInternalUpdate = useRef(false);
+  const bottomBarRef = useRef<HTMLDivElement | null>(null);
 
-export default function NotebookEditor({ initialContent, onChange, readOnly }: NotebookEditorProps) {
-  const [blocks, setBlocks] = useState<NotebookBlock[]>([]);
-  const [slashMenu, setSlashMenu] = useState<SlashMenuState>({
-    active: false,
-    x: 0,
-    y: 0,
-    blockIndex: null,
-    filter: '',
-  });
-  const [slashSelectedIdx, setSlashSelectedIdx] = useState(0);
-  const refs = useRef<Record<string, HTMLDivElement | null>>({});
-  
-  // Track active formatting and block focus
-  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'text' | 'block' | 'attachment' | null>(null);
+  // Toolbar category state
+  const [activeTab, setActiveTab] = useState<'text' | 'list' | 'attachment' | null>(null);
+
+  // Format states
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
   const [isUnderline, setIsUnderline] = useState(false);
-  const bottomBarRef = useRef<HTMLDivElement | null>(null);
+  const [activeFormat, setActiveFormat] = useState<string>('text');
+  const [activeAlign, setActiveAlign] = useState<string>('left');
 
   // Audio recording states
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  // Track if we are currently typing to avoid resetting content and losing cursor
-  const isInternalUpdate = useRef(false);
-
-  // Parse initial content - only if it's not an internal update
+  /* ─── Sync initialContent into the editor ─── */
   useEffect(() => {
     if (isInternalUpdate.current) {
       isInternalUpdate.current = false;
       return;
     }
-
-    try {
-      let parsed = initialContent;
-      if (typeof initialContent === 'string') {
-        parsed = JSON.parse(initialContent);
+    if (editorRef.current) {
+      let html = initialContent || '';
+      if (!html || html.trim() === '' || html === '[]') {
+        html = '<div><br></div>';
       }
-      
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        setBlocks(parsed);
-      } else {
-        setBlocks([{ id: '1', type: 'text', content: '', indent: 0 }]);
-      }
-    } catch (err) {
-      console.error('Failed to parse initial content:', err, 'Raw content:', initialContent);
-      setBlocks([{ id: '1', type: 'text', content: '', indent: 0 }]);
+      editorRef.current.innerHTML = html;
+      updateEmptyState(editorRef.current);
     }
   }, [initialContent]);
 
-  // Sync blocks contents directly into DOM element innerHTML after render
+  /* ─── Auto-resize title textarea ─── */
   useEffect(() => {
-    blocks.forEach((block) => {
-      const el = refs.current[block.id];
-      if (el && !['toc', 'image', 'audio', 'reminder'].includes(block.type)) {
-        if (el.innerHTML !== block.content) {
-          el.innerHTML = block.content;
-        }
-      }
-    });
-  }, [blocks]);
+    if (titleRef.current) {
+      titleRef.current.style.height = 'auto';
+      titleRef.current.style.height = titleRef.current.scrollHeight + 'px';
+    }
+  }, [title]);
 
-  // Handle selection state changes, outside click detection, and mic recording safety unmount
+  /* ─── Auto-focus title for new notes ─── */
+  useEffect(() => {
+    if (!readOnly && titleRef.current && title === '') {
+      setTimeout(() => titleRef.current?.focus(), 80);
+    }
+  }, [readOnly]);
+
+  /* ─── Detect active block format at caret ─── */
+  const getActiveFormatAtCaret = (): string => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) return 'text';
+    let node = selection.anchorNode;
+    while (node && node !== editorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = (node as HTMLElement).tagName.toUpperCase();
+        if (tag === 'H1') return 'h1';
+        if (tag === 'H2') return 'h2';
+        if (tag === 'H3') return 'h3';
+        if (tag === 'LI') {
+          const parentTag = (node as HTMLElement).parentElement?.tagName.toUpperCase();
+          if (parentTag === 'OL') return 'number';
+          if (parentTag === 'UL') {
+            if (
+              (node as HTMLElement).querySelector('.notebook-todo-cb') ||
+              (node as HTMLElement).classList.contains('todo-item-line')
+            )
+              return 'todo';
+            return 'bullet';
+          }
+        }
+        if (tag === 'UL') {
+          if ((node as HTMLElement).classList.contains('todo-list')) return 'todo';
+          return 'bullet';
+        }
+        if (tag === 'OL') return 'number';
+      }
+      node = node.parentNode;
+    }
+    return 'text';
+  };
+
+  const getActiveAlignment = (): string => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) return 'left';
+    let node = selection.anchorNode;
+    while (node && node !== editorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const ta = (node as HTMLElement).style.textAlign;
+        if (ta === 'center') return 'center';
+        if (ta === 'right') return 'right';
+        if (ta === 'left') return 'left';
+      }
+      node = node.parentNode;
+    }
+    return 'left';
+  };
+
+  /* ─── Selection-change listener ─── */
   useEffect(() => {
     if (readOnly) return;
-
-    const handleSelectionChange = () => {
+    const handle = () => {
       setIsBold(document.queryCommandState('bold'));
       setIsItalic(document.queryCommandState('italic'));
       setIsUnderline(document.queryCommandState('underline'));
+      setActiveFormat(getActiveFormatAtCaret());
+      setActiveAlign(getActiveAlignment());
     };
-
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (bottomBarRef.current && !bottomBarRef.current.contains(e.target as Node)) {
-        if (!isRecording) {
-          setActiveTab(null);
-        }
-      }
-    };
-
-    document.addEventListener('selectionchange', handleSelectionChange);
-    document.addEventListener('mousedown', handleOutsideClick);
-
+    document.addEventListener('selectionchange', handle);
     return () => {
-      document.removeEventListener('selectionchange', handleSelectionChange);
-      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('selectionchange', handle);
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       }
     };
   }, [readOnly, isRecording]);
 
-  // Handle keyboard height on mobile for floating bar
+  /* ─── Keyboard-aware bottom bar positioning ─── */
   useEffect(() => {
     if (readOnly) return;
-
-    const handleViewportChange = () => {
-      const visualViewport = (window as any).visualViewport;
-      if (visualViewport && bottomBarRef.current) {
-        // The distance from the layout bottom to the visual bottom is what we need to offset.
-        // This covers both the keyboard height and any 'sliding up' of the screen.
-        const bottomObscured = window.innerHeight - (visualViewport.offsetTop + visualViewport.height);
-        
-        if (bottomObscured > 20) {
-          // Keyboard is visible or screen has shifted
-          bottomBarRef.current.style.bottom = `${bottomObscured + 16}px`;
-        } else {
-          // Revert to CSS
-          bottomBarRef.current.style.bottom = '';
-        }
+    const handleViewport = () => {
+      const vv = (window as any).visualViewport;
+      if (vv && bottomBarRef.current) {
+        const obscured = window.innerHeight - (vv.offsetTop + vv.height);
+        bottomBarRef.current.style.bottom = obscured > 20 ? `${obscured + 16}px` : '';
       }
     };
-
-    const visualViewport = (window as any).visualViewport;
-    if (visualViewport) {
-      visualViewport.addEventListener('resize', handleViewportChange);
-      visualViewport.addEventListener('scroll', handleViewportChange);
-      handleViewportChange();
+    const vv = (window as any).visualViewport;
+    if (vv) {
+      vv.addEventListener('resize', handleViewport);
+      vv.addEventListener('scroll', handleViewport);
+      handleViewport();
     }
-
     return () => {
-      if (visualViewport) {
-        visualViewport.removeEventListener('resize', handleViewportChange);
-        visualViewport.removeEventListener('scroll', handleViewportChange);
+      if (vv) {
+        vv.removeEventListener('resize', handleViewport);
+        vv.removeEventListener('scroll', handleViewport);
       }
     };
   }, [readOnly]);
 
-  // Sync back to parent
-  const updateBlocks = (newBlocks: NotebookBlock[]) => {
-    setBlocks(newBlocks);
+  /* ─── Helpers ─── */
+  const updateEmptyState = (el: HTMLElement) => {
+    const text = el.textContent?.trim() || '';
+    const hasMedia = el.querySelector('.j-image-block, .j-audio-block, .j-reminder-block') !== null;
+    el.classList.toggle('is-empty', text === '' && !hasMedia);
+  };
+
+  const ensureTodoListIntegrity = (el: HTMLElement) => {
+    const todoLis = el.querySelectorAll('li.todo-item-line');
+    const selection = window.getSelection();
+    todoLis.forEach((li) => {
+      if (!li.querySelector('.notebook-todo-cb')) {
+        const isDone = li.classList.contains('done');
+        const span = document.createElement('span');
+        span.className = `custom-task-checkbox notebook-todo-cb ${isDone ? 'done' : ''}`;
+        span.setAttribute('contenteditable', 'false');
+        span.innerHTML = isDone
+          ? '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="tabler-icon tabler-icon-check"><path d="M5 12l5 5l10 -10"></path></svg>'
+          : '<div class="checkbox-inner"></div>';
+        li.insertBefore(span, li.firstChild);
+
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          if (li.contains(range.startContainer)) {
+            const nr = document.createRange();
+            if (span.nextSibling) nr.setStart(span.nextSibling, 0);
+            else { nr.selectNodeContents(li); nr.collapse(false); }
+            selection.removeAllRanges();
+            selection.addRange(nr);
+          }
+        }
+      }
+    });
+  };
+
+  const handleInput = () => {
+    if (!editorRef.current || readOnly) return;
+    ensureTodoListIntegrity(editorRef.current);
+    updateEmptyState(editorRef.current);
+    const html = editorRef.current.innerHTML;
     if (onChange) {
       isInternalUpdate.current = true;
-      onChange(JSON.stringify(newBlocks));
+      onChange(html);
     }
   };
 
-  const getHeadingBlocks = () => {
-    return blocks.filter((b) =>
-      ['h1', 'h2', 'h3', 'toggle-h1', 'toggle-h2', 'toggle-h3'].includes(b.type)
-    );
+  const insertHtmlAtCaret = (html: string) => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      const frag = document.createDocumentFragment();
+      let node: Node | null;
+      let last: Node | null = null;
+      while ((node = tmp.firstChild)) last = frag.appendChild(node);
+      range.insertNode(frag);
+      if (last) {
+        const nr = document.createRange();
+        nr.setStartAfter(last);
+        nr.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(nr);
+      }
+    }
   };
 
-  const handleContentChange = (index: number, html: string) => {
-    if (readOnly) return;
-    const updated = [...blocks];
-    updated[index].content = html;
-    updateBlocks(updated);
-
-    // Handle slash menu activation using text content for parsing
+  /* ─── List formatting ─── */
+  const makeCurrentLineTodo = () => {
     const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const textNode = selection.anchorNode;
-      const offset = selection.anchorOffset;
-      const fullText = textNode?.textContent || '';
-      const beforeCursor = fullText.slice(0, offset);
-
-      const slashIndex = beforeCursor.lastIndexOf('/');
-      if (slashIndex !== -1 && (slashIndex === 0 || beforeCursor[slashIndex - 1] === ' ')) {
-        const query = beforeCursor.slice(slashIndex + 1);
-        const parentElement = textNode?.parentElement;
-        if (parentElement) {
-          const rect = parentElement.getBoundingClientRect();
-          setSlashMenu({
-            active: true,
-            x: rect.left,
-            y: rect.bottom + window.scrollY,
-            blockIndex: index,
-            filter: query,
-          });
-          setSlashSelectedIdx(0);
-        }
-      } else {
-        setSlashMenu((prev) => ({ ...prev, active: false }));
+    if (!selection || selection.rangeCount === 0 || !editorRef.current) return;
+    let node = selection.anchorNode;
+    let li: HTMLLIElement | null = null;
+    while (node && node !== editorRef.current) {
+      if (node.nodeName === 'LI') { li = node as HTMLLIElement; break; }
+      node = node.parentNode;
+    }
+    if (!li) {
+      document.execCommand('insertUnorderedList');
+      let n = window.getSelection()?.anchorNode;
+      while (n && n !== editorRef.current) {
+        if (n.nodeName === 'LI') { li = n as HTMLLIElement; break; }
+        n = n.parentNode;
       }
+    } else {
+      const parent = li.parentElement;
+      if (parent && parent.nodeName === 'OL') {
+        document.execCommand('insertUnorderedList');
+        let n = window.getSelection()?.anchorNode;
+        while (n && n !== editorRef.current) {
+          if (n.nodeName === 'LI') { li = n as HTMLLIElement; break; }
+          n = n.parentNode;
+        }
+      }
+    }
+    if (li) {
+      li.classList.add('todo-item-line');
+      ensureTodoListIntegrity(editorRef.current);
+      handleInput();
     }
   };
 
-  const executeCommand = (type: string) => {
-    if (readOnly || slashMenu.blockIndex === null) return;
-    const idx = slashMenu.blockIndex;
-    const updated = [...blocks];
-
-    // Remove '/' from content — work with innerText to strip slash
-    const el = refs.current[updated[idx].id];
-    let text = el ? el.innerText : updated[idx].content;
-    const slashIdx = text.lastIndexOf('/');
-    if (slashIdx !== -1) {
-      text = text.substring(0, slashIdx);
+  /* ─── Find the LI ancestor of the current selection ─── */
+  const findCaretLi = (): HTMLLIElement | null => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorRef.current) return null;
+    let node = sel.anchorNode;
+    while (node && node !== editorRef.current) {
+      if (node.nodeName === 'LI') return node as HTMLLIElement;
+      node = node.parentNode;
     }
-    updated[idx].content = text;
-    updated[idx].type = type;
+    return null;
+  };
 
-    if (type.startsWith('toggle-')) {
-      updated[idx].collapsed = false;
-    }
+  /* ─── Strip checkbox from an LI (if present) ─── */
+  const stripCheckbox = (li: HTMLLIElement) => {
+    const cb = li.querySelector('.notebook-todo-cb');
+    if (cb) cb.remove();
+    li.classList.remove('todo-item-line');
+  };
 
-    setSlashMenu({ active: false, x: 0, y: 0, blockIndex: null, filter: '' });
-    isInternalUpdate.current = false; 
-    updateBlocks(updated);
+  /* ─── Block type conversions ─── */
+  const changeBlockType = (type: string) => {
+    if (readOnly || !editorRef.current) return;
 
-    setTimeout(() => {
-      const focusEl = refs.current[updated[idx].id];
-      if (focusEl) {
-        focusEl.innerHTML = text;
-        focusEl.focus();
+    const fmt = getActiveFormatAtCaret();
+    const isCaretList = ['todo', 'bullet', 'number'].includes(fmt);
+    const isCaretHeading = ['h1', 'h2', 'h3'].includes(fmt);
+
+    editorRef.current.focus();
+
+    // ── HEADING targets ──
+    if (['h1', 'h2', 'h3'].includes(type)) {
+      // Toggle off: same heading → plain div
+      if (fmt === type) {
+        document.execCommand('formatBlock', false, 'div');
+        handleInput();
+        return;
+      }
+
+      // List → Heading: extract text from LI, create heading in-place
+      if (isCaretList) {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        const li = findCaretLi();
+        let extractedHtml = '';
+        if (li) {
+          const clone = li.cloneNode(true) as HTMLElement;
+          const cb = clone.querySelector('.notebook-todo-cb');
+          if (cb) cb.remove();
+          extractedHtml = clone.innerHTML.trim();
+          if (!extractedHtml || extractedHtml === '&nbsp;') extractedHtml = '<br>';
+        }
+
+        const headingEl = document.createElement(type);
+        headingEl.innerHTML = extractedHtml;
+
+        if (li) {
+          const ul = li.closest('ul, ol');
+          if (ul) {
+            const parent = ul.parentElement;
+            if (parent) {
+              const prevUl = document.createElement(ul.tagName);
+              prevUl.className = ul.className;
+              const nextUl = document.createElement(ul.tagName);
+              nextUl.className = ul.className;
+              let isAfter = false;
+              Array.from(ul.children).forEach((child) => {
+                if (child === li) { isAfter = true; }
+                else if (isAfter) { nextUl.appendChild(child.cloneNode(true)); }
+                else { prevUl.appendChild(child.cloneNode(true)); }
+              });
+              if (prevUl.children.length > 0) parent.insertBefore(prevUl, ul);
+              parent.insertBefore(headingEl, ul);
+              if (nextUl.children.length > 0) parent.insertBefore(nextUl, ul);
+              ul.remove();
+            }
+          } else {
+            li.parentNode?.replaceChild(headingEl, li);
+          }
+        }
+
         const range = document.createRange();
-        const sel = window.getSelection();
-        range.selectNodeContents(focusEl);
+        range.selectNodeContents(headingEl);
         range.collapse(false);
-        if (sel) {
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      }
-    }, 50);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, index: number) => {
-    if (readOnly) return;
-    const block = blocks[index];
-
-    // Slash Menu Controls
-    if (slashMenu.active) {
-      const filtered = getFilteredMenuItems();
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSlashSelectedIdx((slashSelectedIdx + 1) % filtered.length);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        handleInput();
         return;
       }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSlashSelectedIdx((slashSelectedIdx - 1 + filtered.length) % filtered.length);
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const selected = filtered[slashSelectedIdx];
-        if (selected) {
-          executeCommand(selected.type);
-        }
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setSlashMenu((prev) => ({ ...prev, active: false }));
-        return;
-      }
-    }
 
-    // Standard Editor Shortcuts
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      const newBlockId = generateUUID();
-
-      let newType = 'text';
-      let newIndent = block.indent || 0;
-
-      if (['todo', 'bullet'].includes(block.type)) {
-        newType = block.type;
-      } else if (['toggle-h1', 'toggle-h2', 'toggle-h3'].includes(block.type)) {
-        newIndent = (block.indent || 0) + 1;
-      }
-
-      const newBlock: NotebookBlock = {
-        id: newBlockId,
-        type: newType,
-        content: '',
-        indent: newIndent,
-      };
-
-      const updated = [...blocks];
-      updated.splice(index + 1, 0, newBlock);
-      isInternalUpdate.current = false;
-      updateBlocks(updated);
-
-      setTimeout(() => {
-        const el = refs.current[newBlockId];
-        if (el) el.focus();
-      }, 50);
+      // Default: heading or plain text → target heading
+      document.execCommand('formatBlock', false, type.toUpperCase());
+      handleInput();
       return;
     }
 
-    if (e.key === 'Backspace' && (block.content === '' || block.content === '<br>')) {
-      e.preventDefault();
-      if (block.indent > 0) {
-        const updated = [...blocks];
-        updated[index].indent = Math.max(0, block.indent - 1);
-        updateBlocks(updated);
+    // ── LIST targets ──
+    if (['todo', 'bullet', 'number'].includes(type)) {
+      // Heading → List: strip heading first, then apply list
+      if (isCaretHeading) {
+        document.execCommand('formatBlock', false, 'div');
+        setTimeout(() => {
+          if (type === 'todo') {
+            makeCurrentLineTodo();
+          } else if (type === 'bullet') {
+            if (!document.queryCommandState('insertUnorderedList'))
+              document.execCommand('insertUnorderedList');
+          } else if (type === 'number') {
+            if (!document.queryCommandState('insertOrderedList'))
+              document.execCommand('insertOrderedList');
+          }
+          ensureTodoListIntegrity(editorRef.current!);
+          handleInput();
+        }, 0);
         return;
       }
 
-      if (blocks.length > 1 && index > 0) {
-        const prevBlock = blocks[index - 1];
-        const updated = blocks.filter((_, i) => i !== index);
-        isInternalUpdate.current = false;
-        updateBlocks(updated);
+      // Strip checkbox if switching between list types
+      const li = findCaretLi();
+      if (li) stripCheckbox(li);
 
-        setTimeout(() => {
-          const el = refs.current[prevBlock.id];
-          if (el) {
-            el.focus();
-            const range = document.createRange();
-            const sel = window.getSelection();
-            range.selectNodeContents(el);
-            range.collapse(false);
-            if (sel) {
-              sel.removeAllRanges();
-              sel.addRange(range);
+      if (type === 'bullet') {
+        if (!document.queryCommandState('insertUnorderedList'))
+          document.execCommand('insertUnorderedList');
+      } else if (type === 'number') {
+        if (!document.queryCommandState('insertOrderedList'))
+          document.execCommand('insertOrderedList');
+      } else if (type === 'todo') {
+        makeCurrentLineTodo();
+        return; // makeCurrentLineTodo calls handleInput
+      }
+
+      ensureTodoListIntegrity(editorRef.current);
+      handleInput();
+      return;
+    }
+
+    // ── TEXT (normal) target ──
+    if (type === 'text') {
+      if (isCaretHeading) {
+        document.execCommand('formatBlock', false, 'div');
+      } else {
+        const li = findCaretLi();
+        if (li) stripCheckbox(li);
+        document.execCommand('formatBlock', false, 'div');
+        if (document.queryCommandState('insertUnorderedList'))
+          document.execCommand('insertUnorderedList');
+        if (document.queryCommandState('insertOrderedList'))
+          document.execCommand('insertOrderedList');
+      }
+      handleInput();
+    }
+  };
+
+  /* ─── Keyboard handling ─── */
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (readOnly) return;
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        let node = selection.anchorNode;
+        let lineEl: HTMLElement | null = null;
+        while (node && node !== e.currentTarget) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const tag = (node as HTMLElement).tagName.toUpperCase();
+            if (['LI', 'H1', 'H2', 'H3'].includes(tag)) {
+              lineEl = node as HTMLElement;
+              break;
             }
           }
-        }, 50);
+          node = node.parentNode;
+        }
+
+        if (lineEl) {
+          const tag = lineEl.tagName.toUpperCase();
+
+          // Enter at end of heading → new plain div
+          if (['H1', 'H2', 'H3'].includes(tag)) {
+            const isAtEnd =
+              range.endContainer === lineEl ||
+              (range.endContainer.nodeType === Node.TEXT_NODE &&
+                range.endOffset === range.endContainer.textContent?.length);
+            if (isAtEnd) {
+              e.preventDefault();
+              const newDiv = document.createElement('div');
+              newDiv.innerHTML = '<br>';
+              if (lineEl.nextSibling) lineEl.parentNode?.insertBefore(newDiv, lineEl.nextSibling);
+              else lineEl.parentNode?.appendChild(newDiv);
+              const nr = document.createRange();
+              nr.selectNodeContents(newDiv);
+              nr.collapse(true);
+              selection.removeAllRanges();
+              selection.addRange(nr);
+              handleInput();
+              return;
+            }
+          }
+
+          // LI handling
+          if (tag === 'LI') {
+            const textContent = lineEl.textContent?.trim() || '';
+            const hasCheckbox = lineEl.querySelector('.notebook-todo-cb');
+
+            // Exit list on empty enter
+            if (textContent === '' && (hasCheckbox || !lineEl.textContent)) {
+              e.preventDefault();
+              const ul = lineEl.closest('ul, ol');
+              const newDiv = document.createElement('div');
+              newDiv.innerHTML = '<br>';
+              if (ul) {
+                if (lineEl.nextSibling) {
+                  const newUl = document.createElement(ul.tagName);
+                  newUl.className = ul.className;
+                  while (lineEl.nextSibling) newUl.appendChild(lineEl.nextSibling);
+                  ul.parentNode?.insertBefore(newDiv, ul.nextSibling);
+                  ul.parentNode?.insertBefore(newUl, newDiv.nextSibling);
+                } else {
+                  ul.parentNode?.insertBefore(newDiv, ul.nextSibling);
+                }
+                lineEl.remove();
+                if (ul.children.length === 0) ul.remove();
+              } else {
+                lineEl.parentNode?.replaceChild(newDiv, lineEl);
+              }
+              const nr = document.createRange();
+              nr.selectNodeContents(newDiv);
+              nr.collapse(true);
+              selection.removeAllRanges();
+              selection.addRange(nr);
+              handleInput();
+              return;
+            } else if (lineEl.classList.contains('todo-item-line')) {
+              const editor = e.currentTarget as HTMLDivElement;
+              setTimeout(() => ensureTodoListIntegrity(editor), 10);
+            }
+          }
+        }
       }
+    }
+
+    if (e.key === 'Backspace') {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        let node = selection.anchorNode;
+        let lineEl: HTMLElement | null = null;
+        while (node && node !== e.currentTarget) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            const tag = (node as HTMLElement).tagName.toUpperCase();
+            if (['LI', 'H1', 'H2', 'H3'].includes(tag)) {
+              lineEl = node as HTMLElement;
+              break;
+            }
+          }
+          node = node.parentNode;
+        }
+
+        if (lineEl) {
+          const tag = lineEl.tagName.toUpperCase();
+
+          // Backspace at start of heading → convert to div
+          if (['H1', 'H2', 'H3'].includes(tag)) {
+            const preRange = range.cloneRange();
+            preRange.selectNodeContents(lineEl);
+            preRange.setEnd(range.startContainer, range.startOffset);
+            if (preRange.toString().length === 0) {
+              e.preventDefault();
+              const newDiv = document.createElement('div');
+              newDiv.innerHTML = lineEl.innerHTML || '<br>';
+              lineEl.parentNode?.replaceChild(newDiv, lineEl);
+              const nr = document.createRange();
+              nr.selectNodeContents(newDiv);
+              nr.collapse(true);
+              selection.removeAllRanges();
+              selection.addRange(nr);
+              handleInput();
+              return;
+            }
+          }
+
+          // Backspace at start of LI → convert to div
+          if (tag === 'LI') {
+            const checkbox = lineEl.querySelector('.notebook-todo-cb');
+            const preRange = range.cloneRange();
+            if (checkbox) preRange.setStartBefore(checkbox.nextSibling || checkbox);
+            else preRange.setStart(lineEl, 0);
+            preRange.setEnd(range.startContainer, range.startOffset);
+            const cbLen = checkbox ? checkbox.textContent?.length || 0 : 0;
+            const before = preRange.toString();
+            if (before.length <= cbLen && before.trim() === '') {
+              e.preventDefault();
+              const ul = lineEl.closest('ul, ol');
+              const newDiv = document.createElement('div');
+              newDiv.innerHTML = lineEl.innerHTML;
+              const cbInNew = newDiv.querySelector('.notebook-todo-cb');
+              if (cbInNew) cbInNew.remove();
+              if (newDiv.innerHTML.trim() === '' || newDiv.innerHTML === '&nbsp;') newDiv.innerHTML = '<br>';
+
+              if (ul) {
+                if (lineEl.nextSibling) {
+                  const newUl = document.createElement(ul.tagName);
+                  newUl.className = ul.className;
+                  while (lineEl.nextSibling) newUl.appendChild(lineEl.nextSibling);
+                  ul.parentNode?.insertBefore(newDiv, ul.nextSibling);
+                  ul.parentNode?.insertBefore(newUl, newDiv.nextSibling);
+                } else {
+                  ul.parentNode?.insertBefore(newDiv, ul.nextSibling);
+                }
+                lineEl.remove();
+                if (ul.children.length === 0) ul.remove();
+              } else {
+                lineEl.parentNode?.replaceChild(newDiv, lineEl);
+              }
+
+              const nr = document.createRange();
+              nr.selectNodeContents(newDiv);
+              nr.collapse(true);
+              selection.removeAllRanges();
+              selection.addRange(nr);
+              handleInput();
+              return;
+            }
+          }
+        }
+      }
+    }
+  };
+
+  /* ─── Click handling ─── */
+  const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+
+    // Delete buttons for attachment blocks
+    const deleteBtn = target.closest('.j-block-delete-btn, .j-block-delete-btn-static');
+    if (deleteBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const blockEl = deleteBtn.closest('.j-image-block, .j-audio-block, .j-reminder-block');
+      if (blockEl) { blockEl.remove(); handleInput(); }
       return;
     }
 
-    if (e.key === 'Tab') {
+    // Checklist toggles
+    const todoCb = target.closest('.notebook-todo-cb');
+    if (todoCb) {
       e.preventDefault();
-      const updated = [...blocks];
-      if (e.shiftKey) {
-        updated[index].indent = Math.max(0, (block.indent || 0) - 1);
-      } else {
-        updated[index].indent = Math.min(3, (block.indent || 0) + 1);
+      e.stopPropagation();
+      todoCb.classList.toggle('done');
+      const isDone = todoCb.classList.contains('done');
+      const parentLine = todoCb.closest('.todo-item-line');
+      if (parentLine) parentLine.classList.toggle('done', isDone);
+      todoCb.innerHTML = isDone
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="tabler-icon tabler-icon-check"><path d="M5 12l5 5l10 -10"></path></svg>'
+        : '<div class="checkbox-inner"></div>';
+      handleInput();
+      return;
+    }
+  };
+
+  const handleEditorChange = (e: React.FormEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains('j-reminder-input')) {
+      const val = (target as HTMLInputElement).value;
+      const block = target.closest('.j-reminder-block');
+      if (block) {
+        block.setAttribute('data-reminder', val);
+        const timeEl = block.querySelector('.j-reminder-time');
+        if (timeEl) timeEl.textContent = val ? new Date(val).toLocaleString() : 'No date set';
+        handleInput();
       }
-      updateBlocks(updated);
-    }
-
-    if (e.key === 'ArrowUp' && index > 0) {
-      e.preventDefault();
-      const prevId = blocks[index - 1].id;
-      refs.current[prevId]?.focus();
-    }
-
-    if (e.key === 'ArrowDown' && index < blocks.length - 1) {
-      e.preventDefault();
-      const nextId = blocks[index + 1].id;
-      refs.current[nextId]?.focus();
     }
   };
 
-  const handleToggleCollapse = (index: number) => {
-    const updated = [...blocks];
-    updated[index].collapsed = !updated[index].collapsed;
-    updateBlocks(updated);
+  /* ─── Alignment ─── */
+  const applyAlignment = (align: 'left' | 'center' | 'right') => {
+    if (readOnly || !editorRef.current) return;
+    editorRef.current.focus();
+    if (align === 'left') document.execCommand('justifyLeft');
+    else if (align === 'center') document.execCommand('justifyCenter');
+    else if (align === 'right') document.execCommand('justifyRight');
+    setActiveAlign(align);
+    handleInput();
   };
 
-  const toggleTodoDone = (index: number) => {
+  /* ─── Image insertion ─── */
+  const handleAddImage = () => {
     if (readOnly) return;
-    const updated = [...blocks];
-    updated[index].done = !updated[index].done;
-    updateBlocks(updated);
-  };
-
-  // Block Level operations for Bottom Bar Controls
-  const changeBlockType = (idx: number, type: string) => {
-    if (readOnly || idx < 0 || idx >= blocks.length) return;
-    const updated = [...blocks];
-    updated[idx].type = type;
-
-    if (type.startsWith('toggle-')) {
-      updated[idx].collapsed = false;
-    }
-
-    if (type === 'todo') {
-      updated[idx].done = updated[idx].done || false;
-    }
-
-    isInternalUpdate.current = false;
-    updateBlocks(updated);
-
-    setTimeout(() => {
-      const el = refs.current[updated[idx].id];
-      if (el) el.focus();
-    }, 50);
-  };
-
-  const addNewBlockAt = (idx: number) => {
-    if (readOnly) return;
-    const targetIdx = idx >= 0 && idx < blocks.length ? idx : blocks.length - 1;
-    const newId = generateUUID();
-    const newBlock: NotebookBlock = {
-      id: newId,
-      type: 'text',
-      content: '',
-      indent: blocks[targetIdx]?.indent || 0,
-    };
-    const updated = [...blocks];
-    updated.splice(targetIdx + 1, 0, newBlock);
-    isInternalUpdate.current = false;
-    updateBlocks(updated);
-
-    setTimeout(() => {
-      const el = refs.current[newId];
-      if (el) el.focus();
-    }, 50);
-  };
-
-  const deleteBlockAt = (idx: number) => {
-    if (readOnly || idx < 0 || idx >= blocks.length) return;
-    if (blocks.length <= 1) return;
-    const prevBlock = blocks[idx - 1] || blocks[idx + 1];
-    const updated = blocks.filter((_, i) => i !== idx);
-    isInternalUpdate.current = false;
-    updateBlocks(updated);
-
-    setTimeout(() => {
-      const el = refs.current[prevBlock.id];
-      if (el) {
-        el.focus();
-        const range = document.createRange();
-        const sel = window.getSelection();
-        range.selectNodeContents(el);
-        range.collapse(false);
-        if (sel) {
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      }
-    }, 50);
-  };
-
-  // Attachments Handling
-  const handleAddImage = (idx: number) => {
-    if (readOnly || idx < 0 || idx >= blocks.length) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -468,20 +671,13 @@ export default function NotebookEditor({ initialContent, onChange, readOnly }: N
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
         const reader = new FileReader();
-        reader.onload = (readerEvent) => {
-          const base64 = readerEvent.target?.result as string;
-          if (base64) {
-            const newId = generateUUID();
-            const newBlock: NotebookBlock = {
-              id: newId,
-              type: 'image',
-              content: base64,
-              indent: blocks[idx].indent || 0,
-            };
-            const updated = [...blocks];
-            updated.splice(idx + 1, 0, newBlock);
-            isInternalUpdate.current = false;
-            updateBlocks(updated);
+        reader.onload = (re) => {
+          const base64 = re.target?.result as string;
+          if (base64 && editorRef.current) {
+            const imgHtml = `<div class="j-image-block" contenteditable="false"><img src="${base64}" alt="Attachment" class="j-image-preview" /><button type="button" class="j-block-delete-btn" title="Delete image"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg></button></div><div><br></div>`;
+            editorRef.current.focus();
+            insertHtmlAtCaret(imgHtml);
+            handleInput();
           }
         };
         reader.readAsDataURL(file);
@@ -490,44 +686,31 @@ export default function NotebookEditor({ initialContent, onChange, readOnly }: N
     input.click();
   };
 
-  const startRecording = async (idx: number) => {
-    if (readOnly || idx < 0 || idx >= blocks.length) return;
+  /* ─── Voice recording ─── */
+  const startRecording = async () => {
+    if (readOnly) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
       audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      mr.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data); };
+      mr.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
-        reader.onload = (readerEvent) => {
-          const base64 = readerEvent.target?.result as string;
-          if (base64) {
-            const newId = generateUUID();
-            const newBlock: NotebookBlock = {
-              id: newId,
-              type: 'audio',
-              content: base64,
-              indent: blocks[idx].indent || 0,
-            };
-            const updated = [...blocks];
-            updated.splice(idx + 1, 0, newBlock);
-            isInternalUpdate.current = false;
-            updateBlocks(updated);
+        reader.onload = (re) => {
+          const base64 = re.target?.result as string;
+          if (base64 && editorRef.current) {
+            const audioHtml = `<div class="j-audio-block" contenteditable="false"><audio src="${base64}" controls class="j-audio-player" /><button type="button" class="j-block-delete-btn" title="Delete voice note"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg></button></div><div><br></div>`;
+            editorRef.current.focus();
+            insertHtmlAtCaret(audioHtml);
+            handleInput();
           }
         };
-        reader.readAsDataURL(audioBlob);
-        stream.getTracks().forEach((track) => track.stop());
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach((t) => t.stop());
       };
-
-      mediaRecorder.start();
+      mr.start();
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording:', err);
@@ -542,641 +725,227 @@ export default function NotebookEditor({ initialContent, onChange, readOnly }: N
     }
   };
 
-  const handleAddReminder = (idx: number) => {
-    if (readOnly || idx < 0 || idx >= blocks.length) return;
-    const newId = generateUUID();
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(9, 0, 0, 0);
-    const tomorrowStr = tomorrow.toISOString().slice(0, 16);
-
-    const newBlock: NotebookBlock = {
-      id: newId,
-      type: 'reminder',
-      content: tomorrowStr,
-      indent: blocks[idx].indent || 0,
-    };
-    const updated = [...blocks];
-    updated.splice(idx + 1, 0, newBlock);
-    isInternalUpdate.current = false;
-    updateBlocks(updated);
+  /* ─── Reminder insertion ─── */
+  const handleAddReminder = () => {
+    if (readOnly) return;
+    const tmr = new Date();
+    tmr.setDate(tmr.getDate() + 1);
+    tmr.setHours(9, 0, 0, 0);
+    const tmrStr = tmr.toISOString().slice(0, 16);
+    const fmtDate = tmr.toLocaleString();
+    const reminderHtml = `<div class="j-reminder-block" contenteditable="false" data-reminder="${tmrStr}"><div class="j-reminder-card"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="j-reminder-bell"><path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3H4a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6" /><path d="M9 17a3 3 0 0 0 6 0" /></svg><div class="j-reminder-info"><div class="j-reminder-label">Reminder Set</div><div class="j-reminder-time">${fmtDate}</div></div><div class="j-reminder-actions"><input type="datetime-local" class="j-reminder-input" value="${tmrStr}" /><button type="button" class="j-block-delete-btn-static" title="Delete reminder"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg></button></div></div></div><div><br></div>`;
+    if (editorRef.current) {
+      editorRef.current.focus();
+      insertHtmlAtCaret(reminderHtml);
+      handleInput();
+    }
   };
 
-  const handleCloseTab = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (isRecording) {
-      stopRecording();
+  /* ─── Title Enter → focus body ─── */
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      editorRef.current?.focus();
     }
+  };
+
+  /* ─── Close expanded toolbar ─── */
+  const handleCloseTab = (ev: React.MouseEvent) => {
+    ev.preventDefault();
+    if (isRecording) stopRecording();
     setActiveTab(null);
   };
 
-  // Filter menu items for Slash commands
-  const menuItems = [
-    { type: 'text', label: 'Text', icon: IconTextSize, category: 'Basic' },
-    { type: 'h1', label: 'Heading 1', icon: IconH1, category: 'Basic' },
-    { type: 'h2', label: 'Heading 2', icon: IconH2, category: 'Basic' },
-    { type: 'h3', label: 'Heading 3', icon: IconH3, category: 'Basic' },
-    { type: 'todo', label: 'To-do List', icon: IconSquareCheck, category: 'Basic' },
-    { type: 'bullet', label: 'Bullet List', icon: IconList, category: 'Basic' },
-    { type: 'toc', label: 'Table of Contents', icon: IconListTree, category: 'Advanced' },
-    {
-      type: 'toggle-h1',
-      label: 'Toggle Heading 1',
-      icon: IconCaretRightFilled,
-      category: 'Advanced',
-      shortcut: '#>',
-    },
-    {
-      type: 'toggle-h2',
-      label: 'Toggle Heading 2',
-      icon: IconCaretRightFilled,
-      category: 'Advanced',
-      shortcut: '##>',
-    },
-    {
-      type: 'toggle-h3',
-      label: 'Toggle Heading 3',
-      icon: IconCaretRightFilled,
-      category: 'Advanced',
-      shortcut: '###>',
-    },
-  ];
+  /* ─── Toolbar button helper ─── */
+  const TB = ({
+    active,
+    onPress,
+    title: t,
+    className,
+    children,
+  }: {
+    active?: boolean;
+    onPress: () => void;
+    title: string;
+    className?: string;
+    children: React.ReactNode;
+  }) => (
+    <button
+      type="button"
+      className={`keep-toolbar-btn ${className || ''} ${active ? 'active' : ''}`}
+      onMouseDown={(ev) => { ev.preventDefault(); ev.stopPropagation(); onPress(); }}
+      title={t}
+    >
+      {children}
+    </button>
+  );
 
-  const getFilteredMenuItems = () => {
-    if (!slashMenu.filter) return menuItems;
-    return menuItems.filter(
-      (item) =>
-        item.label.toLowerCase().includes(slashMenu.filter.toLowerCase()) ||
-        item.type.toLowerCase().includes(slashMenu.filter.toLowerCase())
-    );
-  };
-
-  // Visibility logic for toggle folding
-  const shouldRenderBlock = (index: number) => {
-    for (let i = index - 1; i >= 0; i--) {
-      const parentBlock = blocks[i];
-      if (['toggle-h1', 'toggle-h2', 'toggle-h3'].includes(parentBlock.type)) {
-        if (parentBlock.collapsed && blocks[index].indent > parentBlock.indent) {
-          return false;
-        }
-      }
-      if (blocks[index].indent <= parentBlock.indent) {
-        if (blocks[index].indent === parentBlock.indent && !parentBlock.type.startsWith('toggle-')) {
-          continue;
-        }
-      }
-    }
-    return true;
-  };
-
-  const filteredItems = getFilteredMenuItems();
-  const activeBlockIdx = blocks.findIndex((b) => b.id === activeBlockId);
-  const currentBlockIdx = activeBlockIdx !== -1 ? activeBlockIdx : blocks.length - 1;
-
+  /* ─── Render ─── */
   return (
-    <div className="notebook-editor" style={{ position: 'relative', width: '100%' }}>
-      {blocks.map((block, idx) => {
-        if (!shouldRenderBlock(idx)) return null;
+    <div className="keep-editor">
+      {/* Title */}
+      <textarea
+        ref={titleRef}
+        className="keep-editor-title"
+        value={title}
+        onChange={(e) => onTitleChange?.(e.target.value)}
+        onKeyDown={handleTitleKeyDown}
+        placeholder="Title"
+        readOnly={readOnly}
+        rows={1}
+      />
 
-        const combinedStyle: React.CSSProperties = {
-          paddingLeft: `${(block.indent || 0) * 24}px`,
-        };
+      {/* Body */}
+      <div
+        ref={editorRef}
+        className="keep-editor-body j-content"
+        contentEditable={!readOnly}
+        suppressContentEditableWarning
+        data-placeholder={!readOnly ? 'Note' : ''}
+        onClick={handleEditorClick}
+        onKeyDown={handleKeyDown}
+        onInput={handleInput}
+        onBlur={handleInput}
+        onChange={handleEditorChange}
+      />
 
-        return (
-          <div
-            key={block.id}
-            className={`j-block group ${block.done ? 'done' : ''}`}
-            data-type={block.type}
-            style={combinedStyle}
-          >
-            {/* Todo checkbox — matches task section style */}
-            {block.type === 'todo' && (
-              <div
-                className={`custom-task-checkbox notebook-todo-cb ${block.done ? 'done' : ''}`}
-                onClick={() => toggleTodoDone(idx)}
-              >
-                {block.done ? (
-                  <IconCheck size={15} strokeWidth={3} />
-                ) : (
-                  <div className="checkbox-inner" />
-                )}
-              </div>
-            )}
-
-            {block.type.startsWith('toggle-') && (
-              <div
-                className={`j-toggle-btn ${!block.collapsed ? 'open' : ''}`}
-                onClick={() => handleToggleCollapse(idx)}
-              >
-                <IconCaretRightFilled size={10} />
-              </div>
-            )}
-
-            {/* Structured/Media Block Renderers */}
-            {block.type === 'image' && (
-              <div className="j-image-block">
-                <img src={block.content} alt="Attachment" className="j-image-preview" />
-                {!readOnly && (
-                  <button
-                    type="button"
-                    className="j-block-delete-btn"
-                    onClick={() => deleteBlockAt(idx)}
-                    title="Delete image"
-                  >
-                    <IconTrash size={16} />
-                  </button>
-                )}
-              </div>
-            )}
-
-            {block.type === 'audio' && (
-              <div className="j-audio-block">
-                <audio src={block.content} controls className="j-audio-player" />
-                {!readOnly && (
-                  <button
-                    type="button"
-                    className="j-block-delete-btn"
-                    onClick={() => deleteBlockAt(idx)}
-                    title="Delete voice note"
-                  >
-                    <IconTrash size={16} />
-                  </button>
-                )}
-              </div>
-            )}
-
-            {block.type === 'reminder' && (
-              <div className="j-reminder-block">
-                <div className="j-reminder-card">
-                  <IconBell size={18} className="j-reminder-bell" />
-                  <div className="j-reminder-info">
-                    <div className="j-reminder-label">Reminder Set</div>
-                    <div className="j-reminder-time">
-                      {block.content ? new Date(block.content).toLocaleString() : 'No date set'}
-                    </div>
-                  </div>
-                  {!readOnly && (
-                    <div className="j-reminder-actions">
-                      <input
-                        type="datetime-local"
-                        className="j-reminder-input"
-                        value={block.content || ''}
-                        onChange={(e) => {
-                          const updated = [...blocks];
-                          updated[idx].content = e.target.value;
-                          updateBlocks(updated);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="j-block-delete-btn-static"
-                        onClick={() => deleteBlockAt(idx)}
-                        title="Delete reminder"
-                      >
-                        <IconTrash size={16} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Standard text editable content area — uses innerHTML for rich formatting */}
-            {!['toc', 'image', 'audio', 'reminder'].includes(block.type) && (
-              <div
-                ref={(el) => {
-                  refs.current[block.id] = el;
-                }}
-                className={`j-content ${!readOnly ? 'focus:outline-none' : ''}`}
-                contentEditable={!readOnly}
-                suppressContentEditableWarning
-                data-placeholder={!readOnly ? "Type '/' for commands" : ""}
-                onFocus={() => {
-                  if (!readOnly) {
-                    setActiveBlockId(block.id);
-                  }
-                }}
-                onKeyDown={(e) => handleKeyDown(e, idx)}
-                onInput={(e) => handleContentChange(idx, e.currentTarget.innerHTML)}
-                onBlur={() => !readOnly && updateBlocks([...blocks])}
-              >
-                {/* Content is managed via innerHTML in useEffect and handleContentChange */}
-              </div>
-            )}
-
-            {/* Table of contents block — no nested j-block wrapper */}
-            {block.type === 'toc' && (
-              <div className="j-toc-wrapper">
-                <div className="j-toc-title">Table of Contents</div>
-                <div className="j-toc-inner">
-                  {getHeadingBlocks().length > 0 ? (
-                    getHeadingBlocks().map((h) => {
-                      // Strip HTML tags from heading content for TOC display
-                      const headingText = (h.content || 'Untitled Heading').replace(/<[^>]*>/g, '');
-                      let headingCls = 'toc-h1';
-                      if (h.type.endsWith('h2')) headingCls = 'toc-h2';
-                      if (h.type.endsWith('h3')) headingCls = 'toc-h3';
-
-                      return (
-                        <a
-                          key={h.id}
-                          href={`#${h.id}`}
-                          className={headingCls}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            refs.current[h.id]?.scrollIntoView({
-                              behavior: 'smooth',
-                              block: 'center',
-                            });
-                            refs.current[h.id]?.focus();
-                          }}
-                        >
-                          {headingText}
-                        </a>
-                      );
-                    })
-                  ) : (
-                    <span style={{ color: 'var(--text3)', fontSize: '12px' }}>
-                      Add headings to see the table of contents.
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {/* Hovering Slash command menu */}
-      {!readOnly && slashMenu.active && (
-        <div
-          className="slash-menu active"
-          style={{
-            left: `${Math.min(slashMenu.x, window.innerWidth - 240)}px`,
-            top: `${slashMenu.y}px`,
-          }}
-        >
-          {filteredItems.length > 0 ? (
-            <div>
-              <div className="slash-cat">Commands</div>
-              {filteredItems.map((item, idx) => {
-                const Icon = item.icon;
-                const isSelected = idx === slashSelectedIdx;
-                return (
-                  <div
-                    key={item.type}
-                    className={`slash-item ${isSelected ? 'selected' : ''}`}
-                    onClick={() => executeCommand(item.type)}
-                  >
-                    <Icon size={14} />
-                    <span>{item.label}</span>
-                    {item.shortcut && <span className="slash-shortcut">{item.shortcut}</span>}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="empty !p-3">No matching commands</div>
-          )}
-        </div>
-      )}
-
-      {/* Docked Fluid Expanding Bottom Bar */}
+      {/* ─── Bottom Toolbar ─── */}
       {!readOnly && (
-        <div className="notebook-editor-bottom-bar" ref={bottomBarRef}>
-          <div className={`notebook-editor-bottom-bar-inner tab-${activeTab || 'none'}`}>
-            
-            {/* Unexpanded main buttons */}
-            {!activeTab && (
-              <div className="main-nav-buttons">
+        <div className="keep-toolbar" ref={bottomBarRef}>
+          <div className="keep-toolbar-inner">
+            {isRecording ? (
+              /* ── Recording state ── */
+              <div className="keep-toolbar-expanded">
+                <div className="keep-toolbar-scrollable">
+                  <div className="recording-status-container">
+                    <span className="recording-indicator animate-pulse" />
+                    <span className="recording-text">Recording…</span>
+                    <button
+                      type="button"
+                      className="recording-stop-btn"
+                      onMouseDown={(ev) => { ev.preventDefault(); ev.stopPropagation(); stopRecording(); }}
+                    >
+                      Stop
+                    </button>
+                  </div>
+                </div>
+                <button type="button" className="keep-toolbar-close" onMouseDown={handleCloseTab} title="Close">
+                  <IconX size={16} />
+                </button>
+              </div>
+            ) : activeTab === null ? (
+              /* ── Collapsed: 3 category buttons ── */
+              <div className="keep-toolbar-categories">
                 <button
                   type="button"
-                  className="notebook-bottom-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setActiveTab('text');
-                  }}
+                  className="keep-toolbar-cat-btn"
+                  onMouseDown={(ev) => { ev.preventDefault(); ev.stopPropagation(); setActiveTab('text'); }}
                   title="Text Formatting"
                 >
                   <IconTextSize size={18} />
                 </button>
                 <button
                   type="button"
-                  className="notebook-bottom-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setActiveTab('block');
-                  }}
-                  title="Block Types"
-                >
-                  <IconGridDots size={18} />
-                </button>
-                <button
-                  type="button"
-                  className="notebook-bottom-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setActiveTab('attachment');
-                  }}
-                  title="Attachments & Reminders"
-                >
-                  <IconPaperclip size={18} />
-                </button>
-                <button
-                  type="button"
-                  className="notebook-bottom-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    addNewBlockAt(currentBlockIdx);
-                  }}
-                  title="New Block"
-                >
-                  <IconPlus size={18} />
-                </button>
-              </div>
-            )}
-
-            {/* Text Tab Expanded */}
-            {activeTab === 'text' && (
-              <div className="expanded-tab-content">
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'h1');
-                  }}
-                  title="Heading 1"
-                >
-                  H1
-                </button>
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'h2');
-                  }}
-                  title="Heading 2"
-                >
-                  H2
-                </button>
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'h3');
-                  }}
-                  title="Heading 3"
-                >
-                  H3
-                </button>
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'text');
-                  }}
-                  title="Normal Text"
-                >
-                  <span className="aa-label">Aa</span>
-                </button>
-
-                <div className="bar-divider" />
-
-                <button
-                  type="button"
-                  className={`notebook-bottom-btn format-btn-b ${isBold ? 'active' : ''}`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    document.execCommand('bold');
-                  }}
-                  title="Bold"
-                >
-                  B
-                </button>
-                <button
-                  type="button"
-                  className={`notebook-bottom-btn format-btn-i ${isItalic ? 'active' : ''}`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    document.execCommand('italic');
-                  }}
-                  title="Italic"
-                >
-                  I
-                </button>
-                <button
-                  type="button"
-                  className={`notebook-bottom-btn format-btn-u ${isUnderline ? 'active' : ''}`}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    document.execCommand('underline');
-                  }}
-                  title="Underline"
-                >
-                  U
-                </button>
-
-                <button
-                  type="button"
-                  className="notebook-bottom-close-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleCloseTab(e);
-                  }}
-                  title="Close"
-                >
-                  <IconX size={16} />
-                </button>
-              </div>
-            )}
-
-
-            {/* Block Tab Expanded */}
-            {activeTab === 'block' && (
-              <div className="expanded-tab-content">
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'todo');
-                  }}
-                  title="To-do List"
-                >
-                  <IconSquareCheck size={18} />
-                </button>
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'bullet');
-                  }}
-                  title="Bullet Points"
+                  className="keep-toolbar-cat-btn"
+                  onMouseDown={(ev) => { ev.preventDefault(); ev.stopPropagation(); setActiveTab('list'); }}
+                  title="Lists"
                 >
                   <IconList size={18} />
                 </button>
                 <button
                   type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'toc');
-                  }}
-                  title="Table of Contents"
+                  className="keep-toolbar-cat-btn"
+                  onMouseDown={(ev) => { ev.preventDefault(); ev.stopPropagation(); setActiveTab('attachment'); }}
+                  title="Attachments"
                 >
-                  <IconListTree size={18} />
+                  <IconPaperclip size={18} />
                 </button>
+              </div>
+            ) : activeTab === 'text' ? (
+              /* ── Expanded: Text Formatting ── */
+              <div className="keep-toolbar-expanded">
+                <div className="keep-toolbar-scrollable">
+                  <TB active={activeFormat === 'h1'} onPress={() => changeBlockType(activeFormat === 'h1' ? 'text' : 'h1')} title="Heading 1">
+                    H1
+                  </TB>
+                  <TB active={activeFormat === 'h2'} onPress={() => changeBlockType(activeFormat === 'h2' ? 'text' : 'h2')} title="Heading 2">
+                    H2
+                  </TB>
+                  <TB active={activeFormat === 'h3'} onPress={() => changeBlockType(activeFormat === 'h3' ? 'text' : 'h3')} title="Heading 3">
+                    H3
+                  </TB>
+                  <TB active={activeFormat === 'text'} onPress={() => changeBlockType('text')} title="Normal Text">
+                    <span className="aa-label">Aa</span>
+                  </TB>
 
-                <div className="bar-divider" />
+                  <div className="keep-toolbar-divider" />
 
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'toggle-h1');
-                  }}
-                  title="Toggle Heading 1"
-                >
-                  T1
-                </button>
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'toggle-h2');
-                  }}
-                  title="Toggle Heading 2"
-                >
-                  T2
-                </button>
-                <button
-                  type="button"
-                  className="notebook-tab-option-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    changeBlockType(currentBlockIdx, 'toggle-h3');
-                  }}
-                  title="Toggle Heading 3"
-                >
-                  T3
-                </button>
+                  <TB active={isBold} className="format-btn-b" onPress={() => { document.execCommand('bold'); setIsBold(document.queryCommandState('bold')); }} title="Bold">
+                    B
+                  </TB>
+                  <TB active={isItalic} className="format-btn-i" onPress={() => { document.execCommand('italic'); setIsItalic(document.queryCommandState('italic')); }} title="Italic">
+                    I
+                  </TB>
+                  <TB active={isUnderline} className="format-btn-u" onPress={() => { document.execCommand('underline'); setIsUnderline(document.queryCommandState('underline')); }} title="Underline">
+                    U
+                  </TB>
 
-                <button
-                  type="button"
-                  className="notebook-bottom-close-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleCloseTab(e);
-                  }}
-                  title="Close"
-                >
+                  <div className="keep-toolbar-divider" />
+
+                  <TB active={activeAlign === 'left'} onPress={() => applyAlignment('left')} title="Align Left">
+                    <IconAlignLeft size={16} />
+                  </TB>
+                  <TB active={activeAlign === 'center'} onPress={() => applyAlignment('center')} title="Align Center">
+                    <IconAlignCenter size={16} />
+                  </TB>
+                  <TB active={activeAlign === 'right'} onPress={() => applyAlignment('right')} title="Align Right">
+                    <IconAlignRight size={16} />
+                  </TB>
+                </div>
+
+                <button type="button" className="keep-toolbar-close" onMouseDown={handleCloseTab} title="Close">
                   <IconX size={16} />
                 </button>
               </div>
-            )}
+            ) : activeTab === 'list' ? (
+              /* ── Expanded: Lists ── */
+              <div className="keep-toolbar-expanded">
+                <div className="keep-toolbar-scrollable">
+                  <TB active={activeFormat === 'todo'} onPress={() => changeBlockType(activeFormat === 'todo' ? 'text' : 'todo')} title="Checkbox">
+                    <IconSquareCheck size={18} />
+                  </TB>
+                  <TB active={activeFormat === 'bullet'} onPress={() => changeBlockType(activeFormat === 'bullet' ? 'text' : 'bullet')} title="Bullet List">
+                    <IconList size={18} />
+                  </TB>
+                  <TB active={activeFormat === 'number'} onPress={() => changeBlockType(activeFormat === 'number' ? 'text' : 'number')} title="Numbered List">
+                    <IconListNumbers size={18} />
+                  </TB>
+                </div>
 
-            {/* Attachments Tab Expanded */}
-            {activeTab === 'attachment' && (
-              <div className="expanded-tab-content">
-                {isRecording ? (
-                  <div className="recording-status-container">
-                    <span className="recording-indicator animate-pulse" />
-                    <span className="recording-text">Recording...</span>
-                    <button
-                      type="button"
-                      className="recording-stop-btn"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        stopRecording();
-                      }}
-                    >
-                      Stop
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="notebook-tab-option-btn"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleAddImage(currentBlockIdx);
-                      }}
-                      title="Add Image"
-                    >
-                      <IconPhoto size={18} />
-                    </button>
-                    <button
-                      type="button"
-                      className="notebook-tab-option-btn"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        startRecording(currentBlockIdx);
-                      }}
-                      title="Add Voice Recording"
-                    >
-                      <IconMicrophone size={18} />
-                    </button>
-                    <button
-                      type="button"
-                      className="notebook-tab-option-btn"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleAddReminder(currentBlockIdx);
-                      }}
-                      title="Add Reminder"
-                    >
-                      <IconBell size={18} />
-                    </button>
-                  </>
-                )}
-
-                <button
-                  type="button"
-                  className="notebook-bottom-close-btn"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleCloseTab(e);
-                  }}
-                  title="Close"
-                >
+                <button type="button" className="keep-toolbar-close" onMouseDown={handleCloseTab} title="Close">
                   <IconX size={16} />
                 </button>
               </div>
-            )}
+            ) : activeTab === 'attachment' ? (
+              /* ── Expanded: Attachments ── */
+              <div className="keep-toolbar-expanded">
+                <div className="keep-toolbar-scrollable">
+                  <TB onPress={handleAddImage} title="Add Image">
+                    <IconPhoto size={18} />
+                  </TB>
+                  <TB onPress={startRecording} title="Voice Recording">
+                    <IconMicrophone size={18} />
+                  </TB>
+                  <TB onPress={handleAddReminder} title="Add Reminder">
+                    <IconBell size={18} />
+                  </TB>
+                </div>
 
-
+                <button type="button" className="keep-toolbar-close" onMouseDown={handleCloseTab} title="Close">
+                  <IconX size={16} />
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

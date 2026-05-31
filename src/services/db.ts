@@ -1,7 +1,7 @@
 // Local state store with automatic LocalStorage caching and daily reset behavior.
 import { triggerSync, registerStore, setLastSyncedState } from './sync';
 import type { AppState, AppStore } from '../types';
-import { generateSecureNumericId } from '../utils/taskHelper';
+import { generateSecureNumericId, convertBlocksToHtml } from '../utils/taskHelper';
 
 
 const LOCAL_STORAGE_KEY = 'system_app_state';
@@ -63,9 +63,7 @@ const defaultState: AppState = {
     {
       id: 20001,
       title: 'Catching butterflies in the park',
-      content: JSON.stringify([
-        { id: 'b1', type: 'text', content: 'What a fantastic day! Prioritizing family time in nature is such a great way to relax. Keep capturing these moments.', indent: 0 }
-      ]),
+      content: '<div>What a fantastic day! Prioritizing family time in nature is such a great way to relax. Keep capturing these moments.</div>',
       bookmarked: true,
       location: 'City Park Conservatory',
       images: [
@@ -78,9 +76,7 @@ const defaultState: AppState = {
     {
       id: 20002,
       title: 'Read Android Authority',
-      content: JSON.stringify([
-        { id: 'b2', type: 'text', content: 'Catching up on the latest tech news. Android 17 features look very promising, especially the revised widget system and theme engines.', indent: 0 }
-      ]),
+      content: '<div>Catching up on the latest tech news. Android 17 features look very promising, especially the revised widget system and theme engines.</div>',
       bookmarked: true,
       location: 'Home Library',
       created_at: new Date('2026-03-17T15:30:00.000Z').toISOString()
@@ -88,9 +84,7 @@ const defaultState: AppState = {
     {
       id: 20003,
       title: '',
-      content: JSON.stringify([
-        { id: 'b3', type: 'text', content: 'Drafting thoughts on my new project ideas. I need to define the database schema and layout mockups before coding.', indent: 0 }
-      ]),
+      content: '<div>Drafting thoughts on my new project ideas. I need to define the database schema and layout mockups before coding.</div>',
       bookmarked: false,
       location: '',
       created_at: new Date('2025-06-16T12:00:00.000Z').toISOString()
@@ -98,9 +92,7 @@ const defaultState: AppState = {
     {
       id: 20004,
       title: 'Today is the day I have...',
-      content: JSON.stringify([
-        { id: 'b4', type: 'text', content: 'Had a great coffee and began designing the new database migration patterns. Feeling motivated today!', indent: 0 }
-      ]),
+      content: '<div>Had a great coffee and began designing the new database migration patterns. Feeling motivated today!</div>',
       bookmarked: false,
       location: 'Coffee Shop',
       created_at: new Date('2026-03-17T09:15:00.000Z').toISOString()
@@ -255,25 +247,23 @@ function migrateUuidIds(s: AppState): AppState {
     return { ...g, id: numericId };
   });
 
-  // 4. Notebooks migration
   const migratedNotebooks = (s.notebooks || (s as any).diaries || (s as any).journals || []).map(j => {
     let content = j.content;
     let contentChanged = false;
     try {
       let parsed = content;
+      if (typeof parsed === 'string') {
+        parsed = JSON.parse(parsed);
+      }
       while (typeof parsed === 'string') {
         parsed = JSON.parse(parsed);
       }
-      const stringified = JSON.stringify(parsed);
-      if (stringified !== content) {
-        content = stringified;
+      if (Array.isArray(parsed)) {
+        content = convertBlocksToHtml(parsed);
         contentChanged = true;
       }
     } catch {
-      if (typeof content === 'string' && !content.trim().startsWith('[') && !content.trim().startsWith('{')) {
-        content = JSON.stringify([{ id: '1', type: 'text', content: content, indent: 0 }]);
-        contentChanged = true;
-      }
+      // If it's a plain string, keep it as is
     }
 
     let images = j.images || [];

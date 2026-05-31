@@ -1,6 +1,7 @@
 // Supabase Sync Service for write-local, sync-global architecture
 import { supabase } from './supabase';
 import type { AppStore } from '../types';
+import { convertBlocksToHtml } from '../utils/taskHelper';
 
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let storeRef: AppStore | null = null;
@@ -299,16 +300,7 @@ export function triggerSync(): void {
       // 5. Sync notebooks (maps to 'journals' table in DB)
       if (notebooksToUpsert.length > 0) {
         const payloads = notebooksToUpsert.map(j => {
-          let parsedContent = [];
-          try {
-            parsedContent = typeof j.content === 'string' ? JSON.parse(j.content) : j.content;
-            while (typeof parsedContent === 'string') {
-              parsedContent = JSON.parse(parsedContent);
-            }
-          } catch (e) {
-            console.error("Failed to parse notebook content for sync:", e);
-            parsedContent = [{ id: '1', type: 'text', content: j.content || '', indent: 0 }];
-          }
+          const parsedContent = [{ id: '1', type: 'text', content: j.content || '', indent: 0 }];
           return {
             id: j.id,
             user_id: userId,
@@ -501,20 +493,23 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
     }
     if (notebooksData) {
       newState.notebooks = notebooksData.map((j: any) => {
-        let contentStr = '[]';
+        let contentStr = '<div><br></div>';
         if (j.content) {
-          if (typeof j.content === 'string') {
-            try {
-              let parsed = JSON.parse(j.content);
-              while (typeof parsed === 'string') {
-                parsed = JSON.parse(parsed);
-              }
-              contentStr = JSON.stringify(parsed);
-            } catch {
+          try {
+            let parsed = j.content;
+            if (typeof parsed === 'string') {
+              parsed = JSON.parse(parsed);
+            }
+            while (typeof parsed === 'string') {
+              parsed = JSON.parse(parsed);
+            }
+            if (Array.isArray(parsed)) {
+              contentStr = convertBlocksToHtml(parsed);
+            } else {
               contentStr = j.content;
             }
-          } else {
-            contentStr = JSON.stringify(j.content);
+          } catch {
+            contentStr = j.content;
           }
         }
 

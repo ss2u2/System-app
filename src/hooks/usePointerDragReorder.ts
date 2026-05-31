@@ -139,10 +139,9 @@ export function usePointerDragReorder<T extends DragItem>({
     const target = e.target as HTMLElement;
     const draggedRow = e.currentTarget;
 
-    // Enforce that dragging only starts from the drag handle if a drag handle exists in the row
-    const hasDragHandle = !!draggedRow.querySelector('.j-drag-handle');
+    // Enforce that dragging only starts from the drag handle
     const isDragHandle = !!target.closest('.j-drag-handle');
-    if (hasDragHandle && !isDragHandle) {
+    if (!isDragHandle) {
       return;
     }
 

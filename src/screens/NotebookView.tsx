@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import {
   IconX,
@@ -15,7 +15,7 @@ import NotebookEditor from '../components/NotebookEditor';
 import FloatingActionButton from '../components/FloatingActionButton';
 import { store } from '../services/db';
 import type { AppState, NotebookEntry } from '../types';
-import { generateSecureNumericId } from '../utils/taskHelper';
+import { generateSecureNumericId, convertBlocksToHtml } from '../utils/taskHelper';
 // Import UI Design System components
 import Button from '../components/ui/Button';
 import Dropdown, { DropdownItem } from '../components/ui/Dropdown';
@@ -101,6 +101,52 @@ const getPatternStyle = (patternName?: string, theme?: string): React.CSSPropert
   }
 };
 
+/* ─── Helper: Extract title & body from legacy content HTML ─── */
+const extractTitleAndBody = (entry: NotebookEntry): { title: string; body: string } => {
+  let content = entry.content || '';
+
+  // Handle legacy JSON block format
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed)) {
+      content = convertBlocksToHtml(parsed);
+    }
+  } catch { /* not JSON, use as-is */ }
+
+  // Extract embedded title from HTML if present (backward compat)
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(content, 'text/html');
+  const titleEl = doc.querySelector('.notebook-title');
+
+  if (titleEl) {
+    const extractedTitle = titleEl.textContent?.trim() || '';
+    titleEl.remove();
+    const body = doc.body.innerHTML.trim();
+    return {
+      title: extractedTitle || entry.title || '',
+      body: body || '<div><br></div>',
+    };
+  }
+
+  return {
+    title: entry.title || '',
+    body: content || '<div><br></div>',
+  };
+};
+
+/* ─── Helper: Check if an entry is empty ─── */
+const isEntryEmpty = (entry: NotebookEntry): boolean => {
+  const { title, body } = extractTitleAndBody(entry);
+  const bodyText = new DOMParser()
+    .parseFromString(body, 'text/html')
+    .body.textContent?.trim() || '';
+  const hasMedia =
+    body.includes('j-image-block') ||
+    body.includes('j-audio-block') ||
+    body.includes('j-reminder-block');
+  return title.trim() === '' && bodyText === '' && !hasMedia;
+};
+
 export default function NotebookView() {
   const { entryId } = useParams();
   const navigate = useNavigate();
@@ -112,25 +158,26 @@ export default function NotebookView() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<number | string | null>(null);
-
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const dateInputRef = useRef<HTMLInputElement | null>(null);
-
-  const handleDateClick = () => {
-    if (dateInputRef.current) {
-      dateInputRef.current.showPicker();
-    }
-  };
+  const [localTitle, setLocalTitle] = useState('');
+  const [localContent, setLocalContent] = useState('');
 
   const activeEntry = state.notebooks.find((j) => String(j.id) === String(entryId));
 
-  // Auto-focus/auto-resize editor text area
+  const lastLoadedIdRef = useRef<number | string | null>(null);
+
+  /* ─── Load entry title & content (with backward compat) ─── */
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    if (activeEntry) {
+      if (lastLoadedIdRef.current !== activeEntry.id) {
+        const { title, body } = extractTitleAndBody(activeEntry);
+        setLocalTitle(title);
+        setLocalContent(body);
+        lastLoadedIdRef.current = activeEntry.id;
+      }
+    } else {
+      lastLoadedIdRef.current = null;
     }
-  }, [activeEntry?.title, isEditing]);
+  }, [activeEntry]);
 
   // Set edit mode automatically for drafts or new entries
   useEffect(() => {
@@ -144,6 +191,18 @@ export default function NotebookView() {
       setIsEditing(false);
     }
   }, [entryId]);
+
+  // Prevent body scrolling when activeEntry (notebook overlay) is open
+  useEffect(() => {
+    if (activeEntry) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [activeEntry]);
 
   // General updater helper for active notebook entry
   const updateActiveEntry = (fields: Partial<NotebookEntry>) => {
@@ -161,7 +220,7 @@ export default function NotebookView() {
     const newEntry: NotebookEntry = {
       id: newId,
       title: '',
-      content: JSON.stringify([{ id: '1', type: 'text', content: '', indent: 0 }]),
+      content: '<div><br></div>',
       bookmarked: false,
       location: '',
       images: [],
@@ -189,32 +248,55 @@ export default function NotebookView() {
     navigate('/notebook');
   };
 
-  const isEntryEmpty = (entry: NotebookEntry) => {
-    if (entry.title && entry.title.trim() !== '') return false;
-    try {
-      const blocks = JSON.parse(entry.content);
-      const hasContent = blocks.some((b: { content?: string }) => b.content && b.content.trim() !== '');
-      if (hasContent) return false;
-    } catch (err) {
-      console.error('Failed to parse blocks for emptiness check:', err);
-    }
-    return true;
-  };
-
   const handleClose = () => {
     if (activeEntry) {
-      if (isEntryEmpty(activeEntry)) {
-        // Remove empty entry completely
-        const updated = state.notebooks.filter((j) => String(j.id) !== String(activeEntry.id));
-        store.setState({ notebooks: updated });
-      } else if (!activeEntry.title || activeEntry.title.trim() === '') {
-        updateActiveEntry({ draft: true });
+      if (isEditing) {
+        const bodyText = new DOMParser()
+          .parseFromString(localContent, 'text/html')
+          .body.textContent?.trim() || '';
+        const hasMedia =
+          localContent.includes('j-image-block') ||
+          localContent.includes('j-audio-block') ||
+          localContent.includes('j-reminder-block');
+        const isEmpty = localTitle.trim() === '' && bodyText === '' && !hasMedia;
+
+        if (isEmpty) {
+          // Remove empty entry completely
+          const updated = state.notebooks.filter((j) => String(j.id) !== String(activeEntry.id));
+          store.setState({ notebooks: updated });
+        } else {
+          // Save current changes as a draft
+          updateActiveEntry({
+            title: localTitle || 'Untitled Entry',
+            content: localContent,
+            draft: true
+          });
+        }
+      } else {
+        if (isEntryEmpty(activeEntry)) {
+          const updated = state.notebooks.filter((j) => String(j.id) !== String(activeEntry.id));
+          store.setState({ notebooks: updated });
+        }
       }
     }
+    setIsEditing(false);
     navigate('/notebook');
   };
 
-
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return 'No Date';
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    }) + ' at ' + date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
 
   // Date Formatting Helpers
   const formatDate = (dateStr?: string) => {
@@ -234,13 +316,7 @@ export default function NotebookView() {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     const titleMatch = j.title.toLowerCase().includes(q);
-    let contentMatch = false;
-    try {
-      const blocks = JSON.parse(j.content);
-      contentMatch = blocks.some((b: { content?: string }) => b.content && b.content.toLowerCase().includes(q));
-    } catch (err) {
-      console.error('Failed to parse blocks for filtering:', err);
-    }
+    const contentMatch = j.content ? j.content.toLowerCase().includes(q) : false;
     return titleMatch || contentMatch;
   });
 
@@ -383,7 +459,7 @@ export default function NotebookView() {
             <div
               className="task-detail-topbar"
               style={{
-                backgroundColor: 'transparent',
+                backgroundColor: overlayBackgroundColor,
                 borderBottom: '1px solid var(--border)'
               }}
             >
@@ -411,7 +487,11 @@ export default function NotebookView() {
                   <Button
                     variant="primary"
                     onClick={() => {
-                      updateActiveEntry({ draft: false });
+                      updateActiveEntry({
+                        title: localTitle || 'Untitled Entry',
+                        content: localContent,
+                        draft: false
+                      });
                       setIsEditing(false);
                     }}
                     style={{
@@ -487,8 +567,7 @@ export default function NotebookView() {
                 }}
               >
                 <div
-                  className="editor-meta-field cursor-pointer"
-                  onClick={handleDateClick}
+                  className="editor-meta-field"
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -500,32 +579,13 @@ export default function NotebookView() {
                     fontSize: '12px',
                     fontWeight: 500,
                     color: 'var(--text2)',
-                    cursor: 'pointer',
                     userSelect: 'none',
                     transition: 'all 0.2s',
                     position: 'relative'
                   }}
                 >
                   <IconCalendar size={14} />
-                  <span>{formatDate(activeEntry.created_at)}</span>
-                  {isEditing && (
-                    <input
-                      ref={dateInputRef}
-                      type="date"
-                      style={{ position: 'absolute', opacity: 0, width: 0, height: 0, pointerEvents: 'none' }}
-                      value={activeEntry.created_at ? new Date(activeEntry.created_at).toISOString().split('T')[0] : ''}
-                      onChange={(e) => {
-                        const selectedVal = e.target.value;
-                        if (!selectedVal) return;
-                        const currentFullDate = activeEntry.created_at ? new Date(activeEntry.created_at) : new Date();
-                        const [y, m, d] = selectedVal.split('-');
-                        currentFullDate.setFullYear(Number(y));
-                        currentFullDate.setMonth(Number(m) - 1);
-                        currentFullDate.setDate(Number(d));
-                        updateActiveEntry({ created_at: currentFullDate.toISOString() });
-                      }}
-                    />
-                  )}
+                  <span>{formatDateTime(activeEntry.created_at)}</span>
                 </div>
 
                 {/* Theme Color Swatch Dropdown */}
@@ -654,48 +714,12 @@ export default function NotebookView() {
                 )}
               </div>
 
-              {/* Large Title */}
-              {isEditing ? (
-                <textarea
-                  ref={textareaRef}
-                  className="notebook-title"
-                  placeholder="Title"
-                  value={activeEntry?.title || ''}
-                  onChange={(e) => updateActiveEntry({ title: e.target.value })}
-                  rows={1}
-                  style={{
-                    width: '100%',
-                    resize: 'none',
-                    height: 'auto',
-                    overflowY: 'hidden',
-                    marginTop: '0px',
-                    marginBottom: '8px'
-                  }}
-                  onInput={(e) => {
-                    const el = e.currentTarget;
-                    el.style.height = 'auto';
-                    el.style.height = `${el.scrollHeight}px`;
-                  }}
-                />
-              ) : (
-                <h1
-                  className="notebook-title"
-                  style={{
-                    width: '100%',
-                    wordBreak: 'break-word',
-                    whiteSpace: 'pre-wrap',
-                    marginTop: '0px',
-                    marginBottom: '8px'
-                  }}
-                >
-                  {activeEntry?.title || 'Untitled Notebook Entry'}
-                </h1>
-              )}
-
-              {/* Notebook Block-based Rich Editor */}
+              {/* Notebook Editor */}
               <NotebookEditor
-                initialContent={activeEntry.content}
-                onChange={(contentString) => updateActiveEntry({ content: contentString })}
+                title={localTitle}
+                onTitleChange={isEditing ? setLocalTitle : undefined}
+                initialContent={localContent}
+                onChange={isEditing ? (contentString) => setLocalContent(contentString) : undefined}
                 readOnly={!isEditing}
               />
             </div>

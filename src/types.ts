@@ -62,19 +62,10 @@ export interface StaticGoal {
   progress: number;
 }
 
-export interface NotebookBlock {
-  id: string;
-  type: string;
-  content: string;
-  indent: number;
-  collapsed?: boolean;
-  done?: boolean;
-}
-
 export interface NotebookEntry {
   id: number | string;
   title: string;
-  content: string; // JSON-stringified NotebookBlock[]
+  content: string; // HTML content string
   bookmarked?: boolean;
   location?: string;
   images?: string[];
