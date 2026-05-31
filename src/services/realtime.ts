@@ -62,7 +62,8 @@ export function setupRealtimeSubscription(userId: string): void {
   // 0. Subscribe to Lists
   handleTableChange('lists', 'lists', row => ({
     id: Number(row.id),
-    name: row.name
+    name: row.name,
+    orderIndex: row.order_index || 0
   }));
 
   // 1. Subscribe to Tasks
@@ -86,7 +87,8 @@ export function setupRealtimeSubscription(userId: string): void {
       repeatValue: repeatValStr,
       deadline: row.deadline || undefined,
       details: row.details || undefined,
-      createdAt: row.created_at ? new Date(row.created_at).getTime() : (typeof row.id === 'number' ? Number(row.id) : Date.now())
+      createdAt: row.created_at ? new Date(row.created_at).getTime() : (typeof row.id === 'number' ? Number(row.id) : Date.now()),
+      orderIndex: row.order_index || 0
     };
   });
 

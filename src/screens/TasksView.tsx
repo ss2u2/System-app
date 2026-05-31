@@ -229,7 +229,8 @@ export default function TasksView() {
     const newListId = generateSecureNumericId();
     const newList = {
       id: newListId,
-      name: newListName.trim()
+      name: newListName.trim(),
+      orderIndex: state.lists ? state.lists.length : 0
     };
     store.setState({ lists: [...(state.lists || []), newList] });
     setNewListName('');
