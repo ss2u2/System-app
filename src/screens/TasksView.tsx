@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import {
   IconStarFilled,
   IconPlus,
@@ -25,6 +25,7 @@ import Dropdown, { DropdownItem } from '../components/ui/Dropdown';
 
 export default function TasksView() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Retrieve shared state and handlers from Outlet Context
   const {
@@ -70,6 +71,7 @@ export default function TasksView() {
   useEffect(() => {
     const handleOpenLists = () => {
       setIsListsModalOpen(true);
+      navigate('#lists');
     };
     window.addEventListener('open-manage-lists', handleOpenLists);
     return () => {
@@ -111,6 +113,20 @@ export default function TasksView() {
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPressActive = useRef(false);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+
+  // Hash based modal closing
+  useEffect(() => {
+    const h = location.hash;
+    if (h !== '#lists' && isListsModalOpen) setIsListsModalOpen(false);
+    if (h !== '#new-list' && isNewListOpen) setIsNewListOpen(false);
+    if (h !== '#new-task' && isNewTaskOpen) setIsNewTaskOpen(false);
+    if (h !== '#rename-list' && listToRename !== null) setListToRename(null);
+    if (h !== '#delete-list' && listToDelete !== null) setListToDelete(null);
+  }, [location.hash]);
+
+  const closeHashModal = (hash: string) => {
+    if (location.hash === hash) navigate(-1);
+  };
 
   // List Reordering Handlers
   const handleReorderLists = (dragId: string | number, targetId: string | number) => {
@@ -157,6 +173,7 @@ export default function TasksView() {
       setIsDraggingSheet(false);
       if (translateY > 120) {
         setIsListsModalOpen(false);
+        closeHashModal('#lists');
       }
       setTranslateY(0);
     };
@@ -193,6 +210,7 @@ export default function TasksView() {
     longPressTimeoutRef.current = setTimeout(() => {
       isLongPressActive.current = true;
       setIsListsModalOpen(true);
+      navigate('#lists');
     }, 500);
   };
 
@@ -235,11 +253,13 @@ export default function TasksView() {
     store.setState({ lists: [...(state.lists || []), newList] });
     setNewListName('');
     setIsNewListOpen(false);
+    closeHashModal('#new-list');
     setActiveListId(newListId);
   };
 
   const handleDeleteList = (listId: number | string) => {
     setListToDelete(listId);
+    navigate('#delete-list');
   };
 
   const handleOpenRenameModal = (listId: number | string) => {
@@ -247,6 +267,7 @@ export default function TasksView() {
     if (list) {
       setListToRename(listId);
       setRenameListName(list.name);
+      navigate('#rename-list');
     }
   };
 
@@ -264,6 +285,7 @@ export default function TasksView() {
     store.setState({ lists: updatedLists });
     setListToRename(null);
     setRenameListName('');
+    closeHashModal('#rename-list');
   };
 
   const confirmDeleteList = () => {
@@ -280,6 +302,7 @@ export default function TasksView() {
     store.setState({ lists: updatedLists, tasks: updatedTasks, deletedIds });
     setActiveListId(1001); // fallback to My Tasks
     setListToDelete(null);
+    closeHashModal('#delete-list');
   };
 
   const handleCreateTask = (taskData: {
@@ -319,6 +342,7 @@ export default function TasksView() {
     };
 
     store.setState({ tasks: [...(state.tasks || []), newTask] });
+    closeHashModal('#new-task');
   };
 
   const handleToggleStar = (taskId: number | string, e: React.MouseEvent) => {
@@ -393,30 +417,38 @@ export default function TasksView() {
         {/* Add List Tab */}
         <button
           className="tasks-tab-item add-list-tab"
-          onClick={() => setIsNewListOpen(true)}
+          onClick={() => {
+            setIsNewListOpen(true);
+            navigate('#new-list');
+          }}
         >
           <IconPlus size={14} />
           <span>New list</span>
         </button>
       </div>
 
-      <TasksContainer
-        state={state}
-        activeListId={activeListId}
-        activeListName={activeListName}
-        handleToggleTask={handleGlobalToggleTask}
-        handleToggleStar={handleToggleStar}
-        handleDeleteTask={handleDeleteTask}
-        handleDeleteList={handleDeleteList}
-        onRenameList={handleOpenRenameModal}
-        onEditTask={handleEditTask}
-        onSwitchList={handleSwitchList}
-        slideDirection={slideDirection}
-      />
+      <div style={{ padding: '0 20px 20px 20px', flex: 1 }}>
+        <TasksContainer
+          state={state}
+          activeListId={activeListId}
+          activeListName={activeListName}
+          handleToggleTask={handleGlobalToggleTask}
+          handleToggleStar={handleToggleStar}
+          handleDeleteTask={handleDeleteTask}
+          handleDeleteList={handleDeleteList}
+          onRenameList={handleOpenRenameModal}
+          onEditTask={handleEditTask}
+          onSwitchList={handleSwitchList}
+          slideDirection={slideDirection}
+        />
+      </div>
 
       {/* Bottom-Right Floating Action Button (FAB) */}
       <FloatingActionButton
-        onClick={() => setIsNewTaskOpen(true)}
+        onClick={() => {
+          setIsNewTaskOpen(true);
+          navigate('#new-task');
+        }}
         icon={IconPlus}
         title="Add Task"
       />
@@ -425,7 +457,10 @@ export default function TasksView() {
       {/* 1. Add List Modal */}
       <Modal
         isOpen={isNewListOpen}
-        onClose={() => setIsNewListOpen(false)}
+        onClose={() => {
+          setIsNewListOpen(false);
+          closeHashModal('#new-list');
+        }}
         title="Create New List"
       >
         <form onSubmit={handleCreateList}>
@@ -442,7 +477,7 @@ export default function TasksView() {
             />
           </FormField>
           <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <Button type="button" onClick={() => setIsNewListOpen(false)} style={{ flex: 1 }}>
+            <Button type="button" onClick={() => { setIsNewListOpen(false); closeHashModal('#new-list'); }} style={{ flex: 1 }}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" style={{ flex: 1 }}>
@@ -455,7 +490,7 @@ export default function TasksView() {
       {/* 2. Add Task Modal */}
       <AddTaskModal
         isOpen={isNewTaskOpen}
-        onClose={() => setIsNewTaskOpen(false)}
+        onClose={() => { setIsNewTaskOpen(false); closeHashModal('#new-task'); }}
         initialListId={activeListId}
         initialStarred={activeListId === 'starred'}
         onSave={handleCreateTask}
@@ -463,7 +498,7 @@ export default function TasksView() {
 
       <ConfirmationModal
         isOpen={listToDelete !== null}
-        onClose={() => setListToDelete(null)}
+        onClose={() => { setListToDelete(null); closeHashModal('#delete-list'); }}
         onConfirm={confirmDeleteList}
         title="Are you sure you want to delete this list and all its tasks?"
         confirmLabel="Delete"
@@ -472,7 +507,7 @@ export default function TasksView() {
       {/* 3. Rename List Modal */}
       <Modal
         isOpen={listToRename !== null}
-        onClose={() => setListToRename(null)}
+        onClose={() => { setListToRename(null); closeHashModal('#rename-list'); }}
         title="Rename List"
       >
         <form onSubmit={handleRenameListSubmit}>
@@ -489,7 +524,7 @@ export default function TasksView() {
             />
           </FormField>
           <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <Button type="button" onClick={() => setListToRename(null)} style={{ flex: 1 }}>
+            <Button type="button" onClick={() => { setListToRename(null); closeHashModal('#rename-list'); }} style={{ flex: 1 }}>
               Cancel
             </Button>
             <Button type="submit" variant="primary" style={{ flex: 1 }}>
@@ -502,7 +537,7 @@ export default function TasksView() {
       {/* List Reordering Bottom Sheet Modal */}
       <div
         className={`bottom-sheet-overlay ${isListsModalOpen ? 'open' : ''}`}
-        onClick={() => setIsListsModalOpen(false)}
+        onClick={() => { setIsListsModalOpen(false); closeHashModal('#lists'); }}
       >
         <div
           className="bottom-sheet-content"
@@ -535,6 +570,7 @@ export default function TasksView() {
                   className="bottom-sheet-arrow-btn"
                   onClick={() => {
                     setIsListsModalOpen(false);
+                    closeHashModal('#lists');
                     handleSwitchList('starred');
                   }}
                 >
@@ -587,6 +623,7 @@ export default function TasksView() {
                       className="bottom-sheet-arrow-btn"
                       onClick={() => {
                         setIsListsModalOpen(false);
+                        closeHashModal('#lists');
                         handleSwitchList(list.id);
                       }}
                     >
@@ -600,7 +637,7 @@ export default function TasksView() {
 
           {/* Footer with Done button */}
           <div className="bottom-sheet-footer">
-            <button className="bottom-sheet-done-btn" onClick={() => setIsListsModalOpen(false)}>
+            <button className="bottom-sheet-done-btn" onClick={() => { setIsListsModalOpen(false); closeHashModal('#lists'); }}>
               Done
             </button>
           </div>

@@ -45,20 +45,7 @@ const defaultState: AppState = {
     {id: 1002, name: 'roz'},
     {id: 1003, name: 'rr'}
   ],
-  weekly: [
-    {id: 1, name: 'Exercise 5x this week', target: 5, current: 2},
-    {id: 2, name: 'Read every day', target: 7, current: 4}
-  ],
-  monthly: [
-    {id: 1, name: 'Finish online course', target: 20, current: 8},
-    {id: 2, name: 'Run 50 km total', target: 50, current: 18}
-  ],
-  static: [
-    {id: 1, name: 'Get in shape', emoji: '💪', note: 'Target: lose 10kg, build muscle', cat: 'health', progress: 35},
-    {id: 2, name: 'Buy a car', emoji: '🚗', note: 'Save ₹3L — target by Dec 2025', cat: 'finance', progress: 52},
-    {id: 3, name: 'Start my own business', emoji: '🚀', note: 'Build skills, save runway, launch by 2026', cat: 'career', progress: 20},
-    {id: 4, name: 'Learn to play guitar', emoji: '🎸', note: 'Complete beginner course + 3 songs', cat: 'life', progress: 68}
-  ],
+
   notebooks: [
     {
       id: 20001,
@@ -119,7 +106,6 @@ const defaultState: AppState = {
   deletedIds: {
     tasks: [],
     sessions: [],
-    goals: [],
     notebooks: [],
     lists: []
   }
@@ -221,31 +207,7 @@ function migrateUuidIds(s: AppState): AppState {
     return { ...sess, id: numericId };
   });
 
-  // 3. Goals migration (weekly, monthly, static)
-  const migratedWeekly = (s.weekly || []).map(g => {
-    const numericId = Number(g.id);
-    if (isNaN(numericId)) {
-      migrated = true;
-      return { ...g, id: generateSecureNumericId() };
-    }
-    return { ...g, id: numericId };
-  });
-  const migratedMonthly = (s.monthly || []).map(g => {
-    const numericId = Number(g.id);
-    if (isNaN(numericId)) {
-      migrated = true;
-      return { ...g, id: generateSecureNumericId() };
-    }
-    return { ...g, id: numericId };
-  });
-  const migratedStatic = (s.static || []).map(g => {
-    const numericId = Number(g.id);
-    if (isNaN(numericId)) {
-      migrated = true;
-      return { ...g, id: generateSecureNumericId() };
-    }
-    return { ...g, id: numericId };
-  });
+
 
   const migratedNotebooks = (s.notebooks || (s as any).diaries || (s as any).journals || []).map(j => {
     let content = j.content;
@@ -361,7 +323,6 @@ function migrateUuidIds(s: AppState): AppState {
     cleanDeleted = {
       tasks: (s.deletedIds.tasks || []).map(Number).filter(n => !isNaN(n)),
       sessions: (s.deletedIds.sessions || []).map(Number).filter(n => !isNaN(n)),
-      goals: (s.deletedIds.goals || []).map(Number).filter(n => !isNaN(n)),
       notebooks: (s.deletedIds.notebooks || (s.deletedIds as any).diaries || (s.deletedIds as any).journals || []).map(Number).filter(n => !isNaN(n)),
       lists: (s.deletedIds.lists || []).map(Number).filter(n => !isNaN(n))
     };
@@ -376,9 +337,6 @@ function migrateUuidIds(s: AppState): AppState {
       ...s,
       lists: migratedLists,
       sessions: migratedSessions,
-      weekly: migratedWeekly,
-      monthly: migratedMonthly,
-      static: migratedStatic,
       notebooks: migratedNotebooks,
       tasks: migratedTasks,
       deletedIds: cleanDeleted
@@ -423,7 +381,7 @@ function loadInitialState(): AppState {
     ];
     parsed.lists = [...parsed.lists].sort((a: any, b: any) => (a.orderIndex || 0) - (b.orderIndex || 0));
     if (!parsed.deletedIds) {
-      parsed.deletedIds = { tasks: [], sessions: [], goals: [], notebooks: [], lists: [] };
+      parsed.deletedIds = { tasks: [], sessions: [], notebooks: [], lists: [] };
     } else {
       parsed.deletedIds.lists = parsed.deletedIds.lists || [];
       if ((parsed.deletedIds as any).diaries) {
@@ -438,7 +396,25 @@ function loadInitialState(): AppState {
     
     // Check if new day has arrived
     const todayStr = new Date().toDateString();
-    if (parsed.lastActiveDate !== todayStr) {
+    let isNewDay = parsed.lastActiveDate !== todayStr;
+    
+    if (isNewDay && parsed.lastActiveDate) {
+      try {
+        if (parsed.lastActiveDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [y, m, d] = parsed.lastActiveDate.split('-');
+          if (new Date(Number(y), Number(m) - 1, Number(d)).toDateString() === todayStr) {
+            isNewDay = false;
+          }
+        } else {
+          const d = new Date(parsed.lastActiveDate);
+          if (!isNaN(d.getTime()) && d.toDateString() === todayStr) {
+            isNewDay = false;
+          }
+        }
+      } catch {}
+    }
+
+    if (isNewDay) {
       // 1. Calculate and record yesterday's completion percentage
       const yesterday = parsed.lastActiveDate || getPastDateString(1);
       const score = calculateScore(parsed);

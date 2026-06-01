@@ -66,7 +66,7 @@ function parseWeekdaysList(text: string): number[] {
 }
 
 // NLP date, time, and custom recurrence parser
-function parseTaskNLP(text: string): ParsedNLP {
+function parseTaskNLP(text: string, ignoredPhrases: string[] = []): ParsedNLP {
   const result: ParsedNLP = {
     date: '',
     time: '',
@@ -79,6 +79,14 @@ function parseTaskNLP(text: string): ParsedNLP {
 
   const today = new Date();
   let cleanText = text;
+
+  ignoredPhrases.forEach(phrase => {
+    let startIdx = 0;
+    while ((startIdx = cleanText.indexOf(phrase, startIdx)) !== -1) {
+      cleanText = cleanText.substring(0, startIdx) + ' '.repeat(phrase.length) + cleanText.substring(startIdx + phrase.length);
+      startIdx += phrase.length;
+    }
+  });
 
   // 1. Parse custom recurrence duration: "for N years/months/weeks/days"
   const durationRegex = /\bfor\s+(\d+|a|an|one)\s+(day|week|month|year)s?\b/gi;
@@ -576,6 +584,8 @@ export default function AddTaskModal({
     repeat: false,
   });
 
+  const [ignoredPhrases, setIgnoredPhrases] = useState<string[]>([]);
+
   const listDropdownRef = useRef<HTMLDivElement>(null);
   const underlayRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -697,6 +707,7 @@ export default function AddTaskModal({
       setTaskDeadline('');
       setRepeatType('none');
       setRepeatValue('');
+      setIgnoredPhrases([]);
       setIsManuallyEdited({ date: false, time: false, repeat: false });
       setIsCalendarOpen(false);
       setIsListDropdownOpen(false);
@@ -776,8 +787,12 @@ export default function AddTaskModal({
       setIsManuallyEdited({ date: false, time: false, repeat: false });
       return;
     }
+    const activeIgnored = ignoredPhrases.filter(phrase => val.toLowerCase().includes(phrase.toLowerCase()));
+    if (activeIgnored.length !== ignoredPhrases.length) {
+      setIgnoredPhrases(activeIgnored);
+    }
 
-    const parsed = parseTaskNLP(val);
+    const parsed = parseTaskNLP(val, activeIgnored);
 
     if (!isManuallyEdited.date) {
       setTaskDate(parsed.date);
@@ -805,7 +820,7 @@ export default function AddTaskModal({
 
   const getUnderlayContent = () => {
     if (!taskName) return '';
-    const parsed = parseTaskNLP(taskName);
+    const parsed = parseTaskNLP(taskName, ignoredPhrases);
     const highlights = parsed.highlights;
 
     if (highlights.length === 0) return taskName;
@@ -843,7 +858,7 @@ export default function AddTaskModal({
     if (!taskName.trim()) return;
 
     let cleanedName = taskName.trim();
-    const parsed = parseTaskNLP(taskName);
+    const parsed = parseTaskNLP(taskName, ignoredPhrases);
     
     // Slice out parsed date/time tokens from task title
     const sortedHighlights = [...parsed.highlights].sort((a, b) => b.start - a.start);
@@ -900,9 +915,29 @@ export default function AddTaskModal({
                 <textarea
                   ref={inputRef}
                   className="nlp-input-textarea"
-                  placeholder="New task"
+                  placeholder="e.g. Call mom every sunday at 10am"
                   value={taskName}
                   onChange={handleInputChange}
+                  onClick={(e) => {
+                    const el = e.target as HTMLTextAreaElement;
+                    const cursor = el.selectionStart;
+                    if (cursor === el.selectionEnd) {
+                      const parsed = parseTaskNLP(taskName, ignoredPhrases);
+                      const clickedHighlight = parsed.highlights.find(h => cursor >= h.start && cursor <= h.end);
+                      if (clickedHighlight) {
+                        const newIgnored = [...ignoredPhrases, clickedHighlight.text];
+                        setIgnoredPhrases(newIgnored);
+                        // Reparse with new ignored phrase
+                        const reParsed = parseTaskNLP(taskName, newIgnored);
+                        if (!isManuallyEdited.date) setTaskDate(reParsed.date);
+                        if (!isManuallyEdited.time) setTaskTime(reParsed.time);
+                        if (!isManuallyEdited.repeat) {
+                          setRepeatType(reParsed.repeatType);
+                          setRepeatValue(reParsed.repeatValue);
+                        }
+                      }
+                    }
+                  }}
                   onScroll={handleInputScroll}
                   onFocus={() => lastFocusedRef.current = 'title'}
                   required

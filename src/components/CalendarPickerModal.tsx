@@ -24,6 +24,7 @@ interface CalendarPickerModalProps {
     repeatType: string;
     repeatValue: string;
   }) => void;
+  initialTab?: 'date' | 'deadline';
 }
 
 export default function CalendarPickerModal({
@@ -34,7 +35,8 @@ export default function CalendarPickerModal({
   deadline,
   repeatType,
   repeatValue,
-  onSave
+  onSave,
+  initialTab = 'date'
 }: CalendarPickerModalProps) {
   // Calendar Month Navigation
   const [navDate, setNavDate] = useState(() => {
@@ -53,7 +55,7 @@ export default function CalendarPickerModal({
   const [tempRepeatValue, setTempRepeatValue] = useState(repeatValue);
 
   // Tab & Warning States
-  const [activeTab, setActiveTab] = useState<'date' | 'deadline'>('date');
+  const [activeTab, setActiveTab] = useState<'date' | 'deadline'>(initialTab);
   const [showDeadlineWarning, setShowDeadlineWarning] = useState(false);
   const timeInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,7 +86,7 @@ export default function CalendarPickerModal({
         initialVal = JSON.stringify({ every: 1, unit: 'day', ends: 'never' });
       }
       setTempRepeatValue(initialVal);
-      setActiveTab('date');
+      setActiveTab(initialTab);
       setShowDeadlineWarning(false);
 
       // Set navigated month to initial selected date or current date

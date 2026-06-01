@@ -48,14 +48,11 @@ export function triggerSync(): void {
         sessions: [],
         tasks: [],
         lists: [],
-        weekly: [],
-        monthly: [],
-        static: [],
         notebooks: [],
         completionHistory: {},
         streak: 0,
         lastActiveDate: '',
-        deletedIds: { tasks: [], sessions: [], goals: [], notebooks: [], lists: [] }
+        deletedIds: { tasks: [], sessions: [], notebooks: [], lists: [] }
       };
     }
 
@@ -119,30 +116,6 @@ export function triggerSync(): void {
         );
       });
       const sessionsToDelete = state.deletedIds?.sessions || [];
-
-      // 4. Goals (weekly, monthly, static combined in DB)
-      const getGoalKey = (g: any, type: string) => `${type}_${g.id}`;
-      const getGoalsList = (s: AppState) => [
-        ...(s.weekly || []).map(g => ({ ...g, type: 'weekly' })),
-        ...(s.monthly || []).map(g => ({ ...g, type: 'monthly' })),
-        ...(s.static || []).map(g => ({ ...g, type: 'static' }))
-      ];
-      const prevGoals = getGoalsList(lastSyncedState);
-      const currGoals = getGoalsList(state);
-      const goalsToUpsert = currGoals.filter(g => {
-        const prev = prevGoals.find(p => getGoalKey(p, p.type) === getGoalKey(g, g.type));
-        if (!prev) return true;
-        return (
-          prev.name !== g.name ||
-          (prev as any).target !== (g as any).target ||
-          (prev as any).current !== (g as any).current ||
-          (prev as any).emoji !== (g as any).emoji ||
-          (prev as any).note !== (g as any).note ||
-          (prev as any).cat !== (g as any).cat ||
-          (prev as any).progress !== (g as any).progress
-        );
-      });
-      const goalsToDelete = state.deletedIds?.goals || [];
 
       // 5. Notebooks
       const prevNotebooks = lastSyncedState.notebooks || [];
@@ -275,29 +248,6 @@ export function triggerSync(): void {
         hasSynced = true;
       }
 
-      // 4. Sync goals
-      if (goalsToUpsert.length > 0) {
-        const payloads = goalsToUpsert.map(g => ({
-          id: g.id,
-          user_id: userId,
-          type: g.type,
-          name: g.name,
-          target: g.type === 'static' ? 100 : (g as any).target,
-          current: g.type === 'static' ? (g as any).progress : (g as any).current,
-          emoji: (g as any).emoji || '🎯',
-          note: (g as any).note || '',
-          cat: (g as any).cat || 'other',
-          progress: (g as any).progress || 0
-        }));
-        const { error } = await client.from('goals').upsert(payloads, { onConflict: 'id' });
-        if (error) console.error('Supabase upsert error [goals]:', error.message);
-        hasSynced = true;
-      }
-      if (goalsToDelete.length > 0) {
-        const { error } = await client.from('goals').delete().in('id', goalsToDelete);
-        if (error) console.error('Supabase delete error [goals]:', error.message);
-        hasSynced = true;
-      }
 
       // 5. Sync notebooks (maps to 'journals' table in DB)
       if (notebooksToUpsert.length > 0) {
@@ -347,7 +297,7 @@ export function triggerSync(): void {
       // Reset deletedIds state locally in one single update
       if (storeRef) {
         storeRef.setState({
-          deletedIds: { tasks: [], sessions: [], goals: [], notebooks: [], lists: [] }
+          deletedIds: { tasks: [], sessions: [], notebooks: [], lists: [] }
         }, true);
       }
 
@@ -429,14 +379,12 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
       listsData,
       tasksData,
       sessionsData,
-      goalsData,
       notebooksData,
       profileData
     ] = await Promise.all([
       fetchTable('lists'),
       fetchTasksWithSubtasks(),
       fetchTable('sessions'),
-      fetchTable('goals'),
       fetchTable('journals'), // remains 'journals' table in DB
       fetchProfile()
     ]);
@@ -491,11 +439,7 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
         repeatDays: s.repeat_days || undefined
       }));
     }
-    if (goalsData) {
-      newState.weekly = goalsData.filter((g: any) => g.type === 'weekly').map((g: any) => ({ id: Number(g.id), name: g.name, target: g.target, current: g.current }));
-      newState.monthly = goalsData.filter((g: any) => g.type === 'monthly').map((g: any) => ({ id: Number(g.id), name: g.name, target: g.target, current: g.current }));
-      newState.static = goalsData.filter((g: any) => g.type === 'static').map((g: any) => ({ id: Number(g.id), name: g.name, emoji: g.emoji, note: g.note, cat: g.cat, progress: g.progress }));
-    }
+
     if (notebooksData) {
       newState.notebooks = notebooksData.map((j: any) => {
         let contentStr = '<div><br></div>';
@@ -547,7 +491,25 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
     if (profileData) {
       newState.streak = profileData.streak;
       newState.completionHistory = profileData.completion_history;
-      newState.lastActiveDate = profileData.last_active_date;
+      if (profileData.last_active_date) {
+        // Parse date string (e.g. "2026-06-02") into local toDateString to match db.ts format
+        const dateStr = profileData.last_active_date;
+        if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          const [y, m, d] = dateStr.split('-');
+          newState.lastActiveDate = new Date(Number(y), Number(m) - 1, Number(d)).toDateString();
+        } else {
+          try {
+            const parsed = new Date(dateStr);
+            if (!isNaN(parsed.getTime())) {
+              newState.lastActiveDate = parsed.toDateString();
+            } else {
+              newState.lastActiveDate = dateStr;
+            }
+          } catch {
+            newState.lastActiveDate = dateStr;
+          }
+        }
+      }
     }
 
     return Object.keys(newState).length > 0 ? newState : null;

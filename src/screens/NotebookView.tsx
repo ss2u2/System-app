@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
+import { useParams, useNavigate, useOutletContext, useLocation } from 'react-router-dom';
 import {
   IconX,
   IconBook,
@@ -149,6 +149,7 @@ const isEntryEmpty = (entry: NotebookEntry): boolean => {
 export default function NotebookView() {
   const { entryId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Retrieve shared state and search query from Outlet Context
   const { state, searchQuery } = useOutletContext<{ state: AppState; searchQuery: string }>();
@@ -246,7 +247,15 @@ export default function NotebookView() {
 
   const handleDeleteEntry = (id: number | string) => {
     setEntryToDelete(id);
+    navigate('#delete-entry');
   };
+
+  // Close modal when hash goes away (back button pressed)
+  useEffect(() => {
+    if (location.hash !== '#delete-entry' && entryToDelete !== null) {
+      setEntryToDelete(null);
+    }
+  }, [location.hash, entryToDelete]);
 
   const confirmDelete = () => {
     if (!entryToDelete) return;
@@ -258,7 +267,11 @@ export default function NotebookView() {
     };
     store.setState({ notebooks: updated, deletedIds });
     setEntryToDelete(null);
-    navigate('/notebook');
+    if (location.hash === '#delete-entry') {
+      navigate('/notebook', { replace: true });
+    } else {
+      navigate('/notebook');
+    }
   };
 
   const handleClose = () => {
@@ -662,7 +675,10 @@ export default function NotebookView() {
 
       <ConfirmationModal
         isOpen={entryToDelete !== null}
-        onClose={() => setEntryToDelete(null)}
+        onClose={() => {
+          setEntryToDelete(null);
+          if (location.hash === '#delete-entry') navigate(-1);
+        }}
         onConfirm={confirmDelete}
         title="Are you sure you want to delete this notebook entry?"
         confirmLabel="Delete"

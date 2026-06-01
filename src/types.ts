@@ -39,29 +39,6 @@ export interface Task {
   orderIndex?: number;
 }
 
-export interface WeeklyGoal {
-  id: number | string;
-  name: string;
-  target: number;
-  current: number;
-}
-
-export interface MonthlyGoal {
-  id: number | string;
-  name: string;
-  target: number;
-  current: number;
-}
-
-export interface StaticGoal {
-  id: number | string;
-  name: string;
-  emoji: string;
-  note: string;
-  cat: string;
-  progress: number;
-}
-
 export interface NotebookEntry {
   id: number | string;
   title: string;
@@ -79,7 +56,6 @@ export interface NotebookEntry {
 export interface DeletedIds {
   tasks: (number | string)[];
   sessions: (number | string)[];
-  goals: (number | string)[];
   notebooks: (number | string)[];
   lists: (number | string)[];
 }
@@ -88,9 +64,6 @@ export interface AppState {
   sessions: Session[];
   tasks: Task[];
   lists: CustomList[];
-  weekly: WeeklyGoal[];
-  monthly: MonthlyGoal[];
-  static: StaticGoal[];
   notebooks: NotebookEntry[];
   completionHistory: Record<string, number>;
   streak: number;

@@ -82,11 +82,11 @@ export default function TaskDetailView({
 
   // Dropdowns / Modals visibility
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [calendarTab, setCalendarTab] = useState<'date' | 'deadline'>('date');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Conflict warning modals
-  const [conflictType, setConflictType] = useState<'repeat-warning' | 'deadline-warning' | null>(null);
-  const [pendingDeadline, setPendingDeadline] = useState('');
+  const [conflictType, setConflictType] = useState<'repeat-warning' | null>(null);
   const [pendingRepeat, setPendingRepeat] = useState<{ type: string; val: string }>({ type: 'none', val: '' });
 
   // Temp Date/Time/Repeat settings for holding conflict resolutions
@@ -94,7 +94,6 @@ export default function TaskDetailView({
   const [tempTime, setTempTime] = useState('');
 
   // Refs
-  const deadlineInputRef = useRef<HTMLInputElement>(null);
   const detailsRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize details textarea on load/change
@@ -195,35 +194,10 @@ export default function TaskDetailView({
 
   // Deadline selection click
   const handleDeadlineClick = () => {
-    if (deadlineInputRef.current) {
-      deadlineInputRef.current.showPicker();
-    }
+    setCalendarTab('deadline');
+    setIsCalendarOpen(true);
   };
 
-  // Deadline change handler
-  const handleDeadlineChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedDate = e.target.value;
-    if (!selectedDate) return;
-
-    if (repeatType !== 'none') {
-      // Conflict! Repeating task cannot have a deadline.
-      setPendingDeadline(selectedDate);
-      setConflictType('deadline-warning');
-    } else {
-      setDeadline(selectedDate);
-      saveTaskDetails(
-        name,
-        listId,
-        starred,
-        done,
-        date,
-        time,
-        repeatType,
-        repeatValue,
-        selectedDate
-      );
-    }
-  };
 
   // Clear Deadline
   const handleClearDeadline = (e: React.MouseEvent) => {
@@ -244,6 +218,7 @@ export default function TaskDetailView({
 
   // Date/Time Modal Save
   const openDateTimeModal = () => {
+    setCalendarTab('date');
     setIsCalendarOpen(true);
   };
 
@@ -272,27 +247,7 @@ export default function TaskDetailView({
     setIsCalendarOpen(false);
   };
 
-  // Conflict Resolution: Set deadline anyway (clears repeat schedule)
-  const handleResolveDeadlineAnyway = () => {
-    // Clear repeat, apply deadline
-    setDeadline(pendingDeadline);
-    setRepeatType('none');
-    setRepeatValue('');
 
-    saveTaskDetails(
-      name,
-      listId,
-      starred,
-      done,
-      date,
-      time,
-      'none', // cleared repeatType
-      '', // cleared repeatValue
-      pendingDeadline
-    );
-
-    setConflictType(null);
-  };
 
   // Subtasks actions
   const handleAddSubtask = (e: React.FormEvent) => {
@@ -530,13 +485,6 @@ export default function TaskDetailView({
               <IconCalendarTime size={20} />
             </div>
             <div className="task-detail-row-content">
-              <input
-                ref={deadlineInputRef}
-                type="date"
-                style={{ display: 'none' }}
-                value={deadline}
-                onChange={handleDeadlineChange}
-              />
               {deadline ? (
                 <div className="task-detail-pill deadline-pill" onClick={handleDeadlineClick}>
                   <span>Due {formatTaskDate(deadline)}</span>
@@ -724,6 +672,7 @@ export default function TaskDetailView({
       <CalendarPickerModal
         isOpen={isCalendarOpen}
         onClose={() => setIsCalendarOpen(false)}
+        initialTab={calendarTab}
         date={date}
         time={time}
         deadline={deadline}
@@ -765,19 +714,15 @@ export default function TaskDetailView({
         title="Repeating tasks cannot have a deadline"
       >
         <div className="warning-desc" style={{ marginBottom: 16, color: 'var(--text2)' }}>
-          {conflictType === 'repeat-warning'
-            ? 'Making this task repeat will remove the deadline'
-            : 'Setting a deadline will remove the repeat schedule'}
+          This task cannot have both a deadline and a repeat schedule. Which one do you want to keep?
         </div>
         <div className="warning-actions" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Button
             variant="danger"
-            onClick={
-              conflictType === 'repeat-warning' ? handleResolveRepeatAnyway : handleResolveDeadlineAnyway
-            }
+            onClick={handleResolveRepeatAnyway}
             fullWidth
           >
-            {conflictType === 'repeat-warning' ? 'Repeat task anyway' : 'Set deadline anyway'}
+            Keep repeat schedule
           </Button>
           <Button variant="secondary" onClick={() => setConflictType(null)} fullWidth>
             Back to editing

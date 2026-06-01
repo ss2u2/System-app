@@ -3,9 +3,6 @@ import { useOutletContext, useNavigate } from 'react-router-dom';
 import {
   IconSun,
   IconLayersIntersect,
-  IconCalendarWeek,
-  IconCalendarMonth,
-  IconFlag,
   IconArrowRight,
   IconPlus,
   IconChevronDown,
@@ -30,7 +27,7 @@ import {
   IconCircleCheck,
 } from '@tabler/icons-react';
 import { store } from '../services/db';
-import type { AppState, Task, Session, WeeklyGoal, MonthlyGoal, StaticGoal, Step } from '../types';
+import type { AppState, Task, Session, Step } from '../types';
 import TaskItem from '../components/TaskItem';
 import AddTaskModal from '../components/AddTaskModal';
 import { generateSecureNumericId, getLocalDateString } from '../utils/taskHelper';
@@ -40,7 +37,6 @@ import { useTheme } from '../context/ThemeContext';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Card from '../components/ui/Card';
-import FormField from '../components/ui/FormField';
 import Dropdown, { DropdownItem } from '../components/ui/Dropdown';
 
 const PRESETS: { name: string; icon: string; color: string; steps: Step[] }[] = [
@@ -159,7 +155,7 @@ const ConfettiCanvas = () => {
 };
 
 export default function DashboardView() {
-  type ModalType = 'task' | 'session' | 'goal' | 'static' | null;
+  type ModalType = 'task' | 'session' | null;
   const navigate = useNavigate();
 
   // Retrieve shared state and handlers from Outlet Context
@@ -173,7 +169,30 @@ export default function DashboardView() {
     handleGlobalDeleteTask: (id: number | string) => void;
   }>();
 
-  const [subTab, setSubTab] = useState<'today' | 'sessions' | 'weekly' | 'monthly' | 'static'>('today');
+  const [subTab, setSubTab] = useState<'today' | 'sessions'>('today');
+
+  // Animation direction logic for subTabs
+  const [subTabSlideClass, setSubTabSlideClass] = useState('slide-none');
+  const prevSubTabIdxRef = useRef<number>(0);
+  
+  useEffect(() => {
+    const tabOrder = ['today', 'sessions'];
+    const currentIdx = tabOrder.indexOf(subTab);
+    const prevIdx = prevSubTabIdxRef.current;
+    
+    if (currentIdx > prevIdx) {
+      setSubTabSlideClass('tasks-container-animate-wrapper slide-right-to-left');
+    } else if (currentIdx < prevIdx) {
+      setSubTabSlideClass('tasks-container-animate-wrapper slide-left-to-right');
+    }
+    
+    prevSubTabIdxRef.current = currentIdx;
+    
+    const timer = setTimeout(() => {
+      setSubTabSlideClass('');
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [subTab]);
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -215,14 +234,9 @@ export default function DashboardView() {
   const [showCelebration, setShowCelebration] = useState<boolean>(false);
   const [wakeLock, setWakeLock] = useState<any>(null);
 
-  const [goalType, setGoalType] = useState<'weekly' | 'monthly'>('weekly');
-  const [goalName, setGoalName] = useState('');
-  const [goalTarget, setGoalTarget] = useState<number | string>(5);
-  const [goalCurrent, setGoalCurrent] = useState<number | string>(0);
 
-  const [lifeGoalName, setLifeGoalName] = useState('');
-  const [lifeGoalEmoji, setLifeGoalEmoji] = useState('🎯');
-  const [lifeGoalNote, setLifeGoalNote] = useState('');
+
+
 
   const colorMap: Record<string, string> = {
     accent: 'var(--accent)',
@@ -790,11 +804,6 @@ export default function DashboardView() {
     setItemToDelete(null);
   };
 
-  const handleUpdateStaticProg = (index: number, val: string) => {
-    const updated = [...state.static];
-    updated[index].progress = parseInt(val, 10);
-    store.setState({ static: updated });
-  };
 
   // Saves
   const handleSaveNewTask = (taskData: {
@@ -1096,46 +1105,6 @@ export default function DashboardView() {
     };
   }, [activeSession, isDndActive]);
 
-  const saveGoal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!goalName.trim()) return;
-    const newGoal = {
-      id: generateSecureNumericId(),
-      name: goalName.trim(),
-      target: parseInt(goalTarget as string, 10) || 5,
-      current: parseInt(goalCurrent as string, 10) || 0,
-    };
-
-    if (goalType === 'weekly') {
-      const updated: WeeklyGoal[] = [...state.weekly, newGoal];
-      store.setState({ weekly: updated });
-    } else {
-      const updated: MonthlyGoal[] = [...state.monthly, newGoal];
-      store.setState({ monthly: updated });
-    }
-    setGoalName('');
-    setGoalTarget(5);
-    setGoalCurrent(0);
-    setActiveModal(null);
-  };
-
-  const saveStaticGoal = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!lifeGoalName.trim()) return;
-    const newLifeGoal: StaticGoal = {
-      id: generateSecureNumericId(),
-      name: lifeGoalName.trim(),
-      emoji: lifeGoalEmoji.trim() || '🎯',
-      note: lifeGoalNote.trim(),
-      cat: '',
-      progress: 0,
-    };
-    store.setState({ static: [...state.static, newLifeGoal] });
-    setLifeGoalName('');
-    setLifeGoalEmoji('🎯');
-    setLifeGoalNote('');
-    setActiveModal(null);
-  };
 
   const handleEditTask = (taskId: number | string) => {
     navigate(`/detail/${taskId}`);
@@ -1152,6 +1121,7 @@ export default function DashboardView() {
           <IconSun size={14} />
           Today
         </button>
+
         <button
           className={`sub-tab ${subTab === 'sessions' ? 'active' : ''}`}
           onClick={() => setSubTab('sessions')}
@@ -1159,30 +1129,10 @@ export default function DashboardView() {
           <IconLayersIntersect size={14} />
           Sessions
         </button>
-        <button
-          className={`sub-tab ${subTab === 'weekly' ? 'active' : ''}`}
-          onClick={() => setSubTab('weekly')}
-        >
-          <IconCalendarWeek size={14} />
-          Weekly
-        </button>
-        <button
-          className={`sub-tab ${subTab === 'monthly' ? 'active' : ''}`}
-          onClick={() => setSubTab('monthly')}
-        >
-          <IconCalendarMonth size={14} />
-          Monthly
-        </button>
-        <button
-          className={`sub-tab ${subTab === 'static' ? 'active' : ''}`}
-          onClick={() => setSubTab('static')}
-        >
-          <IconFlag size={14} />
-          Life Goals
-        </button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px', overflowX: 'hidden' }}>
+        <div key={subTab} className={subTabSlideClass}>
         {/* ==================== TODAY VIEW ==================== */}
         {subTab === 'today' && (
           <div className="view active">
@@ -1495,175 +1445,7 @@ export default function DashboardView() {
           </div>
         )}
 
-        {/* ==================== WEEKLY GOALS ==================== */}
-        {subTab === 'weekly' && (
-          <div className="view active">
-            <div className="sec-hdr">
-              <span className="sec-title">Weekly Goals</span>
-              <Button
-                onClick={() => {
-                  setGoalType('weekly');
-                  setActiveModal('goal');
-                }}
-                className="add-btn"
-                size="sm"
-              >
-                <IconPlus size={13} />
-                Add Goal
-              </Button>
-            </div>
-
-            <div className="goals-list">
-              {state.weekly && state.weekly.length > 0 ? (
-                state.weekly.map((g) => {
-                  const pct = Math.min(100, Math.round((g.current / g.target) * 100));
-                  const cls = pct >= 80 ? 'fill-green' : pct >= 40 ? 'fill-amber' : 'fill-red';
-                  const scls = pct >= 80 ? 'status-on' : pct >= 40 ? 'status-at' : 'status-off';
-                  const slbl = pct >= 80 ? 'On track' : pct >= 40 ? 'In progress' : 'Needs work';
-
-                  return (
-                    <Card key={g.id} className="goal-item">
-                      <div className="goal-top">
-                        <div className="goal-name">{g.name}</div>
-                        <span className={`goal-status ${scls}`}>{slbl}</span>
-                      </div>
-                      <div className="goal-prog-row">
-                        <div className="goal-prog-track">
-                          <div className={`goal-prog-fill ${cls}`} style={{ width: `${pct}%` }}></div>
-                        </div>
-                        <span className="goal-pct">
-                          {g.current}/{g.target} · {pct}%
-                        </span>
-                      </div>
-                    </Card>
-                  );
-                })
-              ) : (
-                <div className="empty">
-                  <IconCalendarWeek />
-                  No weekly goals yet.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ==================== MONTHLY GOALS ==================== */}
-        {subTab === 'monthly' && (
-          <div className="view active">
-            <div className="sec-hdr">
-              <span className="sec-title">Monthly Goals</span>
-              <Button
-                onClick={() => {
-                  setGoalType('monthly');
-                  setActiveModal('goal');
-                }}
-                className="add-btn"
-                size="sm"
-              >
-                <IconPlus size={13} />
-                Add Goal
-              </Button>
-            </div>
-
-            <div className="goals-list">
-              {state.monthly && state.monthly.length > 0 ? (
-                state.monthly.map((g) => {
-                  const pct = Math.min(100, Math.round((g.current / g.target) * 100));
-                  const cls = pct >= 80 ? 'fill-green' : pct >= 40 ? 'fill-amber' : 'fill-red';
-                  const scls = pct >= 80 ? 'status-on' : pct >= 40 ? 'status-at' : 'status-off';
-                  const slbl = pct >= 80 ? 'On track' : pct >= 40 ? 'In progress' : 'Needs work';
-
-                  return (
-                    <Card key={g.id} className="goal-item">
-                      <div className="goal-top">
-                        <div className="goal-name">{g.name}</div>
-                        <span className={`goal-status ${scls}`}>{slbl}</span>
-                      </div>
-                      <div className="goal-prog-row">
-                        <div className="goal-prog-track">
-                          <div className={`goal-prog-fill ${cls}`} style={{ width: `${pct}%` }}></div>
-                        </div>
-                        <span className="goal-pct">
-                          {g.current}/{g.target} · {pct}%
-                        </span>
-                      </div>
-                    </Card>
-                  );
-                })
-              ) : (
-                <div className="empty">
-                  <IconCalendarMonth />
-                  No monthly goals yet.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ==================== LIFE GOALS (STATIC) ==================== */}
-        {subTab === 'static' && (
-          <div className="view active">
-            <div className="sec-hdr">
-              <span className="sec-title">Life Goals</span>
-              <Button onClick={() => setActiveModal('static')} className="add-btn" size="sm">
-                <IconPlus size={13} />
-                Add Goal
-              </Button>
-            </div>
-
-            <div className="static-list">
-              {state.static && state.static.length > 0 ? (
-                state.static.map((g, gi) => {
-                  const pct = Math.min(100, Math.round(g.progress));
-                  const fillCls = pct >= 70 ? 'fill-green' : pct >= 35 ? 'fill-amber' : 'fill-red';
-
-                  return (
-                    <Card key={g.id} hoverable className="static-card">
-                      <div className="static-top">
-                        <div className="static-emoji">{g.emoji}</div>
-                        <div className="static-info">
-                          <div className="static-name">{g.name}</div>
-                          {g.note && <div className="static-note">{g.note}</div>}
-                        </div>
-                      </div>
-                      <div className="static-bottom">
-                        <div className="static-status-row">
-                          <div className="static-prog-track">
-                            <div
-                              className={`static-prog-fill ${fillCls}`}
-                              style={{ width: `${pct}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                        <span className="static-pct">{pct}%</span>
-                      </div>
-                      <div className="static-edit-row" style={{ marginTop: '12px' }}>
-                        <label htmlFor={`range-goal-${g.id}`}>Progress</label>
-                        <input
-                          id={`range-goal-${g.id}`}
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={pct}
-                          step="1"
-                          onChange={(e) => handleUpdateStaticProg(gi, e.target.value)}
-                          className="flex-1 accent-[#7c6af7]"
-                        />
-                        <span>{pct}%</span>
-                      </div>
-                    </Card>
-                  );
-                })
-              ) : (
-                <div className="empty">
-                  <IconFlag />
-                  No life goals yet.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* ==================== ADD TASK MODAL ==================== */}
@@ -2134,109 +1916,8 @@ export default function DashboardView() {
         </>
       )}
 
-      {/* ==================== ADD GOAL MODAL ==================== */}
-      <Modal
-        isOpen={activeModal === 'goal'}
-        onClose={() => setActiveModal(null)}
-        title={`Add ${goalType === 'weekly' ? 'Weekly' : 'Monthly'} Goal`}
-      >
-        <form onSubmit={saveGoal}>
-          <FormField label="Goal description" htmlFor="modal-goal-name">
-            <input
-              id="modal-goal-name"
-              type="text"
-              placeholder="e.g. Exercise 5 times this week"
-              value={goalName}
-              onChange={(e) => setGoalName(e.target.value)}
-              className="ui-input"
-              autoFocus
-              required
-            />
-          </FormField>
-          <FormField label="Target (number)" htmlFor="modal-goal-target">
-            <input
-              id="modal-goal-target"
-              type="number"
-              placeholder="5"
-              min="1"
-              value={goalTarget}
-              onChange={(e) => setGoalTarget(e.target.value)}
-              className="ui-input"
-              required
-            />
-          </FormField>
-          <FormField label="Current progress" htmlFor="modal-goal-current">
-            <input
-              id="modal-goal-current"
-              type="number"
-              placeholder="0"
-              min="0"
-              value={goalCurrent}
-              onChange={(e) => setGoalCurrent(e.target.value)}
-              className="ui-input"
-            />
-          </FormField>
-          <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <Button type="button" onClick={() => setActiveModal(null)} style={{ flex: 1 }}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" style={{ flex: 1 }}>
-              Save Goal
-            </Button>
-          </div>
-        </form>
-      </Modal>
 
-      {/* ==================== ADD LIFE GOAL MODAL ==================== */}
-      <Modal
-        isOpen={activeModal === 'static'}
-        onClose={() => setActiveModal(null)}
-        title="Add Life Goal"
-      >
-        <form onSubmit={saveStaticGoal}>
-          <FormField label="Goal title" htmlFor="modal-life-goal-name">
-            <input
-              id="modal-life-goal-name"
-              type="text"
-              placeholder="e.g. Learn to play piano"
-              value={lifeGoalName}
-              onChange={(e) => setLifeGoalName(e.target.value)}
-              className="ui-input"
-              autoFocus
-              required
-            />
-          </FormField>
-          <FormField label="Emoji icon" htmlFor="modal-life-goal-emoji">
-            <input
-              id="modal-life-goal-emoji"
-              type="text"
-              placeholder="🎯"
-              maxLength={2}
-              value={lifeGoalEmoji}
-              onChange={(e) => setLifeGoalEmoji(e.target.value)}
-              className="ui-input"
-            />
-          </FormField>
-          <FormField label="Notes" htmlFor="modal-life-goal-notes">
-            <input
-              id="modal-life-goal-notes"
-              type="text"
-              placeholder="Target: Complete basic exercises"
-              value={lifeGoalNote}
-              onChange={(e) => setLifeGoalNote(e.target.value)}
-              className="ui-input"
-            />
-          </FormField>
-          <div className="modal-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-            <Button type="button" onClick={() => setActiveModal(null)} style={{ flex: 1 }}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" style={{ flex: 1 }}>
-              Save Goal
-            </Button>
-          </div>
-        </form>
-      </Modal>
+
 
       {/* ==================== LAUNCH SESSION MODAL ==================== */}
       <Modal

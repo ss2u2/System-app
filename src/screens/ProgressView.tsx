@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { IconFlag } from '@tabler/icons-react';
+
 import type { AppState } from '../types';
 
 export default function ProgressView() {
@@ -82,45 +82,7 @@ export default function ProgressView() {
         <div className="streak-bar">{render14DayActivity()}</div>
       </div>
 
-      <div className="divider"></div>
 
-      <div className="sec-hdr">
-        <span className="sec-title">Life Goals overview</span>
-      </div>
-
-      <div className="static-list">
-        {state.static && state.static.length > 0 ? (
-          state.static.map((g) => {
-            const pct = Math.min(100, Math.round(g.progress));
-            const fillCls = pct >= 70 ? 'fill-green' : pct >= 35 ? 'fill-amber' : 'fill-red';
-
-            return (
-              <div key={g.id} className="static-card">
-                <div className="static-top">
-                  <div className="static-emoji">{g.emoji}</div>
-                  <div className="static-info">
-                    <div className="static-name">{g.name}</div>
-                    {g.note && <div className="static-note">{g.note}</div>}
-                  </div>
-                </div>
-                <div className="static-bottom">
-                  <div className="static-status-row">
-                    <div className="static-prog-track">
-                      <div className={`static-prog-fill ${fillCls}`} style={{ width: `${pct}%` }}></div>
-                    </div>
-                  </div>
-                  <span className="static-pct">{pct}%</span>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="empty">
-            <IconFlag />
-            No life goals yet.
-          </div>
-        )}
-      </div>
     </div>
   );
 }

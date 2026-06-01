@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
@@ -28,6 +28,41 @@ export function AuthenticatedLayout() {
   } else if (path.startsWith('/notebook')) {
     activeTab = 'notebook';
   }
+
+  // Animation direction logic
+  const [slideClass, setSlideClass] = useState('slide-none');
+  const prevTabIdxRef = useRef<number>(0);
+  
+  useEffect(() => {
+    const tabOrder = ['toady', 'tasks', 'report', 'notebook'];
+    const currentIdx = tabOrder.indexOf(activeTab);
+    const prevIdx = prevTabIdxRef.current;
+    
+    if (currentIdx > prevIdx) {
+      setSlideClass('tasks-container-animate-wrapper slide-right-to-left');
+    } else if (currentIdx < prevIdx) {
+      setSlideClass('tasks-container-animate-wrapper slide-left-to-right');
+    }
+    
+    prevTabIdxRef.current = currentIdx;
+    
+    // Reset animation class after it plays so it can be re-triggered
+    const timer = setTimeout(() => {
+      setSlideClass('');
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
+
+  // Hash based modal closing
+  useEffect(() => {
+    if (location.hash !== '#account' && isSyncModalOpen) {
+      setIsSyncModalOpen(false);
+    }
+  }, [location.hash]);
+
+  const closeHashModal = (hash: string) => {
+    if (location.hash === hash) navigate(-1);
+  };
 
   const handleGlobalToggleTask = (id: number | string) => {
     const updated = state.tasks.map(t => {
@@ -155,7 +190,7 @@ export function AuthenticatedLayout() {
     <AppContainer>
       {/* 1. Header Bar */}
       <TopBar
-        onOpenSyncModal={() => setIsSyncModalOpen(true)}
+        onOpenSyncModal={() => { setIsSyncModalOpen(true); navigate('#account'); }}
         activeTab={activeTab}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -163,17 +198,39 @@ export function AuthenticatedLayout() {
 
       {/* 2. Scrollable Body Views */}
       <div className="app-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', minHeight: 0, overflow: 'hidden' }}>
-        <Outlet context={{ state, searchQuery, setSearchQuery, handleGlobalToggleTask, handleGlobalDeleteTask }} />
+        <div key={activeTab} className={slideClass} style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Outlet context={{ state, searchQuery, setSearchQuery, handleGlobalToggleTask, handleGlobalDeleteTask }} />
+        </div>
       </div>
 
       {/* 3. Navigation Bar */}
       <BottomNav
         activeTab={activeTab}
         setActiveTab={(tab) => {
-          if (tab === 'toady') navigate('/');
-          else if (tab === 'tasks') navigate('/tasks');
-          else if (tab === 'report') navigate('/report');
-          else if (tab === 'notebook') navigate('/notebook');
+          if (tab === activeTab) return;
+          
+          if (activeTab === 'toady') {
+            // From Dashboard to Tab: Push
+            const path = tab === 'tasks' ? '/tasks' : tab === 'report' ? '/report' : '/notebook';
+            navigate(path);
+          } else if (tab === 'toady') {
+            // From Tab to Dashboard: Pop history to keep stack clean, or push if no history
+            if (window.history.length > 1) {
+              navigate(-1);
+              // Fallback just in case navigate(-1) didn't go to dashboard (e.g. they landed directly on the tab)
+              setTimeout(() => {
+                if (window.location.pathname !== '/') {
+                  navigate('/', { replace: true });
+                }
+              }, 100);
+            } else {
+              navigate('/');
+            }
+          } else {
+            // From Tab to Tab: Replace
+            const path = tab === 'tasks' ? '/tasks' : tab === 'report' ? '/report' : '/notebook';
+            navigate(path, { replace: true });
+          }
         }}
       />
 
@@ -182,7 +239,7 @@ export function AuthenticatedLayout() {
       {/* Account sync modal */}
       <SyncConfig
         isOpen={isSyncModalOpen}
-        onClose={() => setIsSyncModalOpen(false)}
+        onClose={() => { setIsSyncModalOpen(false); closeHashModal('#account'); }}
       />
 
       {/* Task Detail Overlay Screen (driven by URL params) */}
