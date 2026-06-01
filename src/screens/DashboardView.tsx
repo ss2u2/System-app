@@ -233,6 +233,7 @@ export default function DashboardView() {
   const [isDndActive, setIsDndActive] = useState<boolean>(false);
   const [showCelebration, setShowCelebration] = useState<boolean>(false);
   const [wakeLock, setWakeLock] = useState<any>(null);
+  const [showExitConfirm, setShowExitConfirm] = useState<boolean>(false);
 
 
 
@@ -960,19 +961,21 @@ export default function DashboardView() {
     }
   };
 
-  const handleStepComplete = () => {
+  const handleStepComplete = (isSkip: boolean = false) => {
     if (!activeSession) return;
     
     playChime();
     const currentStep = activeSession.steps[currentStepIdx];
     
     // Linked Task Sync
-    if (currentStep.taskId) {
+    if (currentStep.taskId && !isSkip) {
       handleGlobalToggleTask(currentStep.taskId);
     }
     
     const updatedSteps = [...activeSession.steps];
-    updatedSteps[currentStepIdx] = { ...currentStep, done: true };
+    if (!isSkip) {
+      updatedSteps[currentStepIdx] = { ...currentStep, done: true };
+    }
     const updatedSession = { ...activeSession, steps: updatedSteps };
     setActiveSession(updatedSession);
     
@@ -2015,6 +2018,54 @@ export default function DashboardView() {
       />
 
       {/* Fullscreen Zen Mode Session Player */}
+      {showExitConfirm && (
+        <Modal
+          isOpen={showExitConfirm}
+          onClose={() => setShowExitConfirm(false)}
+          className="modal-expand-anim"
+          style={{
+            background: isDark ? 'var(--bg2)' : '#ffffff',
+            padding: '24px',
+            textAlign: 'center',
+            borderRadius: 'var(--radius-xl)',
+            border: `1px solid ${isDark ? 'var(--border2)' : '#e5e7eb'}`,
+            zIndex: 10000
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Quit Session
+            </span>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, color: isDark ? '#fff' : '#111827', margin: 0 }}>
+              Are you sure you want to quit the session?
+            </h2>
+            <p style={{ fontSize: '14px', color: isDark ? 'var(--text3)' : '#6b7280', margin: '0 0 8px 0', lineHeight: 1.5 }}>
+              Your progress for the current step will not be saved.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '8px' }}>
+              <Button
+                variant="ghost"
+                onClick={() => setShowExitConfirm(false)}
+                style={{ flex: 1, padding: '12px', borderRadius: '24px', color: isDark ? 'var(--text3)' : '#4b5563', fontSize: '14px', fontWeight: 600, background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (wakeLock) wakeLock.release().catch(() => {});
+                  setShowExitConfirm(false);
+                  setActiveSession(null);
+                }}
+                style={{ flex: 1, padding: '12px', borderRadius: '24px', background: '#ef4444', color: '#fff', fontSize: '14px', fontWeight: 600, border: 'none' }}
+              >
+                Quit Session
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {activeSession && (
         <div style={{
           position: 'fixed',
@@ -2023,83 +2074,53 @@ export default function DashboardView() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          background: '#0d0c14',
-          color: '#fff',
-          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+          background: isDark ? '#0d0c14' : '#ffffff',
+          color: isDark ? '#ffffff' : '#111827',
+          fontFamily: 'ui-rounded, "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
         }}>
-          {/* Ambient Glow Background Blobs */}
-          <div style={{
-            position: 'absolute',
-            top: '-10%',
-            left: '-10%',
-            width: '50%',
-            height: '50%',
-            borderRadius: '50%',
-            background: activeSession.color === 'green' ? 'rgba(74, 222, 128, 0.12)' :
-                        activeSession.color === 'blue' ? 'rgba(96, 165, 250, 0.12)' :
-                        activeSession.color === 'amber' ? 'rgba(245, 158, 11, 0.12)' :
-                        activeSession.color === 'pink' ? 'rgba(232, 121, 249, 0.12)' :
-                        'rgba(124, 106, 247, 0.12)',
-            filter: 'blur(100px)',
-            zIndex: 0,
-            pointerEvents: 'none'
-          }} />
-          <div style={{
-            position: 'absolute',
-            bottom: '-10%',
-            right: '-10%',
-            width: '55%',
-            height: '55%',
-            borderRadius: '50%',
-            background: activeSession.color === 'green' ? 'rgba(13, 42, 26, 0.3)' :
-                        activeSession.color === 'blue' ? 'rgba(13, 31, 58, 0.3)' :
-                        activeSession.color === 'amber' ? 'rgba(42, 31, 7, 0.3)' :
-                        activeSession.color === 'pink' ? 'rgba(42, 10, 46, 0.3)' :
-                        'rgba(30, 26, 58, 0.3)',
-            filter: 'blur(120px)',
-            zIndex: 0,
-            pointerEvents: 'none'
-          }} />
-
           {(() => {
             const currentStep = activeSession.steps[currentStepIdx];
             const totalSteps = activeSession.steps.length;
             const progressPct = totalSteps ? ((currentStepIdx) / totalSteps) * 100 : 0;
             const stepColorHex = colorMap[activeSession.color] || '#7c6af7';
-            const stepBgHex = colorBgMap[activeSession.color] || '#1e1a3a';
+            const stepBgHex = colorBgMap[activeSession.color] || (isDark ? '#1e1a3a' : '#f3f4f6');
             const r = 90;
             const circ = 2 * Math.PI * r;
             const totalSecs = currentStep && currentStep.type === 'timer' ? parseInt(currentStep.dur || '5', 10) * 60 : 0;
             const timerPct = totalSecs ? (timeLeft / totalSecs) * 100 : 0;
             const timerOffset = circ - (timerPct / 100) * circ;
 
-            const formatTime = (s: number) => {
+            const formatTime = (s) => {
               const mins = Math.floor(s / 60);
               const secs = s % 60;
               return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
             };
+
+            const headerBtnBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+            const headerBtnColor = isDark ? '#fff' : '#111827';
+            const panelBorder = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+            const muteText = isDark ? '#9ca3af' : '#6b7280';
+            const lightMuteText = isDark ? '#d1d5db' : '#4b5563';
 
             return (
               <>
                 {/* Header bar */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', zIndex: 10 }}>
                   <button
-                    onClick={() => {
-                      if (wakeLock) wakeLock.release().catch(() => {});
-                      setActiveSession(null);
-                    }}
+                    onClick={() => setShowExitConfirm(true)}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: 'rgba(255,255,255,0.06)',
+                      background: headerBtnBg,
                       border: 'none',
-                      color: '#fff',
+                      color: headerBtnColor,
                       padding: '8px 14px',
                       borderRadius: '16px',
                       fontSize: '12px',
                       cursor: 'pointer',
-                      fontWeight: 500
+                      fontWeight: 600,
+                      transition: 'background 0.2s'
                     }}
                   >
                     <IconArrowLeft size={16} />
@@ -2107,10 +2128,10 @@ export default function DashboardView() {
                   </button>
 
                   <div style={{ textAlign: 'center' }}>
-                    <span style={{ fontSize: '10px', opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+                    <span style={{ fontSize: '10px', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: muteText }}>
                       {activeSession.icon} {activeSession.name}
                     </span>
-                    <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, marginTop: '2px', color: headerBtnColor }}>
                       Step {currentStepIdx + 1} of {totalSteps}
                     </div>
                   </div>
@@ -2121,16 +2142,17 @@ export default function DashboardView() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
-                      background: isDndActive ? 'rgba(74, 222, 128, 0.15)' : 'rgba(255,255,255,0.06)',
+                      background: isDndActive ? (isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.1)') : headerBtnBg,
                       border: '1px solid',
-                      borderColor: isDndActive ? '#4ade80' : 'transparent',
-                      color: isDndActive ? '#4ade80' : '#fff',
+                      borderColor: isDndActive ? '#10b981' : 'transparent',
+                      color: isDndActive ? '#10b981' : headerBtnColor,
                       padding: '8px 14px',
                       borderRadius: '16px',
                       fontSize: '11px',
                       cursor: 'pointer',
                       fontWeight: 600,
-                      boxShadow: isDndActive ? '0 0 10px rgba(74, 222, 128, 0.15)' : 'none',
+                      transition: 'all 0.2s',
+                      boxShadow: (isDndActive && isDark) ? '0 0 10px rgba(16, 185, 129, 0.15)' : 'none',
                     }}
                   >
                     {isDndActive ? <IconLock size={14} /> : <IconLockOpen size={14} />}
@@ -2139,7 +2161,7 @@ export default function DashboardView() {
                 </div>
 
                 {/* Progress bar line */}
-                <div style={{ height: '3px', background: 'rgba(255,255,255,0.08)', width: '100%', zIndex: 10 }}>
+                <div style={{ height: '3px', background: panelBorder, width: '100%', zIndex: 10 }}>
                   <div style={{ height: '100%', background: stepColorHex, width: `${progressPct}%`, transition: 'width 0.3s ease' }} />
                 </div>
 
@@ -2151,36 +2173,36 @@ export default function DashboardView() {
                       {isDndActive && (
                         <div style={{
                           marginBottom: '20px',
-                          background: 'rgba(74,222,128,0.08)',
-                          border: '1px solid rgba(74,222,128,0.2)',
+                          background: 'rgba(16,185,129,0.08)',
+                          border: '1px solid rgba(16,185,129,0.2)',
                           borderRadius: '12px',
                           padding: '6px 12px',
                           fontSize: '11px',
-                          color: '#4ade80',
+                          color: '#10b981',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '6px',
                           animation: 'pulse 2s infinite'
                         }}>
-                          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80' }} />
-                          <span>Focus Shield Active (DND & Screen Keep-On)</span>
+                          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+                          <span>Focus Shield Active</span>
                         </div>
                       )}
 
-                      <h2 style={{ fontSize: '28px', fontWeight: 800, margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
+                      <h2 style={{ fontSize: '28px', fontWeight: 800, margin: '0 0 6px 0', letterSpacing: '-0.02em', color: headerBtnColor }}>
                         {currentStep.name}
                       </h2>
                       
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '32px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '40px' }}>
                         <span style={{
-                          fontSize: '9px',
+                          fontSize: '10px',
                           textTransform: 'uppercase',
-                          padding: '3px 8px',
-                          borderRadius: '10px',
-                          background: 'rgba(255,255,255,0.08)',
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          background: panelBorder,
                           fontWeight: 700,
                           letterSpacing: '0.05em',
-                          opacity: 0.8,
+                          color: lightMuteText,
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '4px'
@@ -2205,7 +2227,7 @@ export default function DashboardView() {
                           )}
                         </span>
                         {currentStep.taskId && (
-                          <span style={{ fontSize: '9px', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '2px', background: 'rgba(96,165,250,0.1)', padding: '2px 8px', borderRadius: '10px', fontWeight: 600 }}>
+                          <span style={{ fontSize: '10px', color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '2px', background: 'rgba(59,130,246,0.1)', padding: '4px 10px', borderRadius: '12px', fontWeight: 700 }}>
                             <IconLink size={10} /> Linked Task
                           </span>
                         )}
@@ -2213,27 +2235,27 @@ export default function DashboardView() {
 
                       {/* Adaptive step center UI element */}
                       {currentStep.type === 'timer' && (
-                        <div style={{ position: 'relative', width: '220px', height: '220px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '32px' }}>
-                          <svg width="220" height="220" style={{ transform: 'rotate(-90deg)', position: 'absolute', top: 0, left: 0 }}>
-                            <circle cx="110" cy="110" r={r} stroke="rgba(255,255,255,0.04)" strokeWidth="6" fill="none" />
+                        <div style={{ position: 'relative', width: '260px', height: '260px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '40px' }}>
+                          <svg width="260" height="260" style={{ transform: 'rotate(-90deg)', position: 'absolute', top: 0, left: 0 }}>
+                            <circle cx="130" cy="130" r="115" stroke={panelBorder} strokeWidth="3" fill="none" />
                             <circle
-                              cx="110"
-                              cy="110"
-                              r={r}
+                              cx="130"
+                              cy="130"
+                              r="115"
                               stroke={stepColorHex}
-                              strokeWidth="8"
+                              strokeWidth="4"
                               fill="none"
-                              strokeDasharray={circ}
-                              strokeDashoffset={timerOffset}
+                              strokeDasharray={2 * Math.PI * 115}
+                              strokeDashoffset={(2 * Math.PI * 115) - ((timerPct / 100) * (2 * Math.PI * 115))}
                               strokeLinecap="round"
                               style={{ transition: 'stroke-dashoffset 0.5s linear' }}
                             />
                           </svg>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{ fontSize: '42px', fontWeight: 800, fontFamily: 'monospace', letterSpacing: '-0.02em' }}>
+                            <span style={{ fontSize: '64px', fontWeight: 800, letterSpacing: '-0.04em', color: headerBtnColor, lineHeight: 1 }}>
                               {formatTime(timeLeft)}
                             </span>
-                            <span style={{ fontSize: '11px', opacity: 0.5, marginTop: '2px' }}>
+                            <span style={{ fontSize: '13px', color: muteText, marginTop: '8px', fontWeight: 600 }}>
                               of {currentStep.dur} mins
                             </span>
                           </div>
@@ -2241,29 +2263,29 @@ export default function DashboardView() {
                       )}
 
                       {currentStep.type === 'counter' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px', width: '100%' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '40px', width: '100%' }}>
                           <div style={{
-                            width: '180px',
-                            height: '180px',
+                            width: '200px',
+                            height: '200px',
                             borderRadius: '50%',
-                            background: 'rgba(255,255,255,0.02)',
-                            border: `3px solid ${stepColorHex}`,
+                            background: isDark ? 'rgba(255,255,255,0.02)' : '#ffffff',
+                            border: `4px solid ${stepColorHex}`,
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            boxShadow: `0 4px 20px ${stepBgHex}`,
-                            marginBottom: '24px'
+                            boxShadow: isDark ? `0 4px 20px ${stepBgHex}` : `0 10px 40px ${stepBgHex}`,
+                            marginBottom: '32px'
                           }}>
-                            <span style={{ fontSize: '48px', fontWeight: 800 }}>
+                            <span style={{ fontSize: '56px', fontWeight: 800, color: headerBtnColor }}>
                               {currentStep.currentCount || 0}
                             </span>
-                            <span style={{ fontSize: '11px', opacity: 0.5, borderTop: '1px solid rgba(255,255,255,0.1)', padding: '4px 12px 0 12px', marginTop: '4px' }}>
+                            <span style={{ fontSize: '13px', color: muteText, borderTop: `1px solid ${panelBorder}`, padding: '6px 16px 0 16px', marginTop: '8px', fontWeight: 600 }}>
                               Target: {currentStep.targetCount || 50}
                             </span>
                           </div>
 
-                          <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center' }}>
+                          <div style={{ display: 'flex', gap: '16px', width: '100%', justifyContent: 'center' }}>
                             <button
                               onClick={() => {
                                 const updated = { ...activeSession };
@@ -2272,17 +2294,18 @@ export default function DashboardView() {
                                 setActiveSession(updated);
                               }}
                               style={{
-                                width: '48px',
-                                height: '48px',
+                                width: '56px',
+                                height: '56px',
                                 borderRadius: '50%',
-                                background: 'rgba(255,255,255,0.05)',
+                                background: headerBtnBg,
                                 border: 'none',
-                                color: '#fff',
-                                fontSize: '16px',
+                                color: headerBtnColor,
+                                fontSize: '18px',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center'
+                                justifyContent: 'center',
+                                fontWeight: 700
                               }}
                             >
                               -1
@@ -2298,19 +2321,19 @@ export default function DashboardView() {
                                 setActiveSession(updated);
                               }}
                               style={{
-                                width: '64px',
-                                height: '64px',
+                                width: '72px',
+                                height: '72px',
                                 borderRadius: '50%',
                                 background: stepColorHex,
                                 border: 'none',
-                                color: '#fff',
-                                fontSize: '22px',
+                                color: '#ffffff',
+                                fontSize: '24px',
                                 fontWeight: 'bold',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                boxShadow: `0 4px 12px color-mix(in srgb, ${stepColorHex} 25%, transparent)`
+                                boxShadow: `0 8px 24px color-mix(in srgb, ${stepColorHex} 30%, transparent)`
                               }}
                             >
                               +1
@@ -2326,13 +2349,13 @@ export default function DashboardView() {
                                 setActiveSession(updated);
                               }}
                               style={{
-                                width: '48px',
-                                height: '48px',
+                                width: '56px',
+                                height: '56px',
                                 borderRadius: '50%',
-                                background: 'rgba(255,255,255,0.08)',
+                                background: headerBtnBg,
                                 border: 'none',
-                                color: '#fff',
-                                fontSize: '13px',
+                                color: headerBtnColor,
+                                fontSize: '15px',
                                 fontWeight: 'bold',
                                 cursor: 'pointer',
                                 display: 'flex',
@@ -2344,53 +2367,53 @@ export default function DashboardView() {
                             </button>
                           </div>
                           
-                          <div style={{ marginTop: '16px', fontSize: '11px', opacity: 0.5, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <IconClock size={12} />
+                          <div style={{ marginTop: '24px', fontSize: '13px', color: muteText, display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                            <IconClock size={14} />
                             <span>Stopwatch: {Math.floor(elapsedTime / 60)}m {elapsedTime % 60}s</span>
                           </div>
                         </div>
                       )}
 
                       {currentStep.type === 'checklist' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px', width: '100%' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '40px', width: '100%' }}>
                           <button
-                            onClick={handleStepComplete}
+                            onClick={() => handleStepComplete(false)}
                             style={{
-                              width: '150px',
-                              height: '150px',
+                              width: '180px',
+                              height: '180px',
                               borderRadius: '50%',
-                              background: 'rgba(255,255,255,0.02)',
-                              border: `3px dashed ${stepColorHex}`,
+                              background: isDark ? 'rgba(255,255,255,0.02)' : '#ffffff',
+                              border: `4px dashed ${stepColorHex}`,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               cursor: 'pointer',
                               color: stepColorHex,
                               transition: 'all 0.2s',
-                              marginBottom: '20px'
+                              marginBottom: '24px'
                             }}
                             onMouseEnter={(e) => {
-                               e.currentTarget.style.background = `color-mix(in srgb, ${stepColorHex} 3%, transparent)`;
+                               e.currentTarget.style.background = `color-mix(in srgb, ${stepColorHex} ${isDark ? '15%' : '5%'}, transparent)`;
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                              e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.02)' : '#ffffff';
                             }}
                           >
-                            <IconCheck size={60} strokeWidth={2} />
+                            <IconCheck size={72} strokeWidth={2.5} />
                           </button>
-                          <div style={{ fontSize: '13px', opacity: 0.6, fontWeight: 500 }}>
+                          <div style={{ fontSize: '15px', color: lightMuteText, fontWeight: 600 }}>
                             Tap to Complete Step
                           </div>
                           
-                          <div style={{ marginTop: '16px', fontSize: '11px', opacity: 0.5, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <IconClock size={12} />
+                          <div style={{ marginTop: '24px', fontSize: '13px', color: muteText, display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                            <IconClock size={14} />
                             <span>Stopwatch: {Math.floor(elapsedTime / 60)}m {elapsedTime % 60}s</span>
                           </div>
                         </div>
                       )}
 
                       {/* Control buttons */}
-                      <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'center', marginTop: '12px' }}>
+                      <div style={{ display: 'flex', gap: '16px', width: '100%', justifyContent: 'center', marginTop: '16px' }}>
                         {currentStep.type === 'timer' && (
                           <>
                             <button
@@ -2399,61 +2422,65 @@ export default function DashboardView() {
                                 setTimeLeft(total);
                               }}
                               style={{
-                                padding: '8px 16px',
-                                borderRadius: '18px',
-                                background: 'rgba(255,255,255,0.05)',
+                                padding: '12px 24px',
+                                borderRadius: '24px',
+                                background: headerBtnBg,
                                 border: 'none',
-                                color: '#fff',
-                                fontSize: '12px',
-                                fontWeight: 500,
+                                color: lightMuteText,
+                                fontSize: '14px',
+                                fontWeight: 700,
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '4px'
+                                gap: '6px',
+                                transition: 'all 0.2s'
                               }}
                             >
-                              <IconRefresh size={14} /> Reset
+                              <IconRefresh size={16} /> Reset
                             </button>
                             <button
                               onClick={() => setIsPlaying(!isPlaying)}
                               style={{
-                                padding: '8px 20px',
-                                borderRadius: '18px',
-                                background: isPlaying ? 'rgba(255,255,255,0.08)' : stepColorHex,
+                                padding: '12px 32px',
+                                borderRadius: '24px',
+                                background: isPlaying ? headerBtnBg : stepColorHex,
                                 border: 'none',
-                                color: '#fff',
-                                fontSize: '12px',
-                                fontWeight: 600,
+                                color: isPlaying ? lightMuteText : '#ffffff',
+                                fontSize: '14px',
+                                fontWeight: 700,
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '4px'
+                                gap: '8px',
+                                boxShadow: isPlaying ? 'none' : `0 6px 16px color-mix(in srgb, ${stepColorHex} 30%, transparent)`,
+                                transition: 'all 0.2s'
                               }}
                             >
-                              {isPlaying ? <IconPlayerPause size={14} fill="currentColor" /> : <IconPlayerPlay size={14} fill="currentColor" />}
+                              {isPlaying ? <IconPlayerPause size={16} fill="currentColor" /> : <IconPlayerPlay size={16} fill="currentColor" />}
                               <span>{isPlaying ? 'Pause' : 'Resume'}</span>
                             </button>
                           </>
                         )}
 
                         <button
-                          onClick={handleStepComplete}
+                          onClick={() => handleStepComplete(true)}
                           style={{
-                            padding: '8px 20px',
-                            borderRadius: '18px',
-                            background: currentStep.type === 'timer' ? 'rgba(255,255,255,0.05)' : stepColorHex,
+                            padding: '12px 24px',
+                            borderRadius: '24px',
+                            background: currentStep.type === 'timer' ? headerBtnBg : stepColorHex,
                             border: 'none',
-                            color: '#fff',
-                            fontSize: '12px',
-                            fontWeight: 600,
+                            color: currentStep.type === 'timer' ? lightMuteText : '#ffffff',
+                            fontSize: '14px',
+                            fontWeight: 700,
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '4px'
+                            gap: '6px',
+                            transition: 'all 0.2s'
                           }}
                         >
-                          <span>Skip/Next</span>
-                          <IconPlayerSkipForward size={14} fill="currentColor" />
+                          <span>Skip</span>
+                          <IconPlayerSkipForward size={16} fill="currentColor" />
                         </button>
                       </div>
 
@@ -2463,10 +2490,9 @@ export default function DashboardView() {
 
                 {/* Bottom Up-Next banner */}
                 <div style={{
-                  background: 'rgba(255,255,255,0.02)',
-                  borderTop: '1px solid rgba(255,255,255,0.05)',
-                  backdropFilter: 'blur(10px)',
-                  padding: '14px 20px',
+                  background: isDark ? '#15141e' : '#f9fafb',
+                  borderTop: `1px solid ${panelBorder}`,
+                  padding: '16px 24px',
                   zIndex: 10,
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -2475,43 +2501,44 @@ export default function DashboardView() {
                   {currentStepIdx + 1 < totalSteps ? (
                     <>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '9px', opacity: 0.4, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Up Next</span>
-                        <span style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>
+                        <span style={{ fontSize: '10px', color: muteText, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>Up Next</span>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: headerBtnColor, marginTop: '2px' }}>
                           {activeSession.steps[currentStepIdx + 1].name}
                         </span>
                       </div>
                       <div style={{
-                        fontSize: '10px',
-                        opacity: 0.7,
-                        background: 'rgba(255,255,255,0.06)',
-                        padding: '3px 8px',
-                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: lightMuteText,
+                        background: panelBorder,
+                        padding: '6px 12px',
+                        borderRadius: '12px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
                       }}>
                         {activeSession.steps[currentStepIdx + 1].type === 'timer' && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <IconHourglass size={12} />
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <IconHourglass size={14} />
                             <span>{activeSession.steps[currentStepIdx + 1].dur}m</span>
                           </span>
                         )}
                         {activeSession.steps[currentStepIdx + 1].type === 'counter' && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <IconHash size={12} />
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <IconHash size={14} />
                             <span>{activeSession.steps[currentStepIdx + 1].targetCount} reps</span>
                           </span>
                         )}
                         {activeSession.steps[currentStepIdx + 1].type === 'checklist' && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <IconCircleCheck size={12} />
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <IconCircleCheck size={14} />
                             <span>Task</span>
                           </span>
                         )}
                       </div>
                     </>
                   ) : (
-                    <div style={{ width: '100%', textAlign: 'center', fontSize: '12px', opacity: 0.5, fontWeight: 500 }}>
+                    <div style={{ width: '100%', textAlign: 'center', fontSize: '13px', color: muteText, fontWeight: 600 }}>
                       🏁 Final routine activity block
                     </div>
                   )}
@@ -2525,7 +2552,7 @@ export default function DashboardView() {
             <div style={{
               position: 'absolute',
               inset: 0,
-              background: '#0c0b11',
+              background: isDark ? '#0d0c14' : '#ffffff',
               zIndex: 100,
               display: 'flex',
               flexDirection: 'column',
@@ -2533,46 +2560,46 @@ export default function DashboardView() {
               justifyContent: 'center',
               padding: '24px',
               textAlign: 'center',
-              color: '#fff'
+              color: isDark ? '#ffffff' : '#111827'
             }}>
               <ConfettiCanvas />
               
               <div style={{ zIndex: 110, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '340px' }}>
                 <div style={{
-                  width: '90px',
-                  height: '90px',
+                  width: '96px',
+                  height: '96px',
                   borderRadius: '50%',
                   background: 'rgba(245, 158, 11, 0.1)',
                   border: '2px solid #f59e0b',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '44px',
+                  fontSize: '48px',
                   marginBottom: '24px',
-                  boxShadow: '0 0 30px rgba(245,158,11,0.2)',
+                  boxShadow: '0 10px 40px rgba(245,158,11,0.15)',
                 }}>
                   🔥
                 </div>
                 
-                <h1 style={{ fontSize: '32px', fontWeight: 800, margin: '0 0 8px 0', letterSpacing: '-0.03em', background: 'linear-gradient(to right, #f59e0b, #ef4444)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                <h1 style={{ fontSize: '36px', fontWeight: 800, margin: '0 0 12px 0', letterSpacing: '-0.03em', background: 'linear-gradient(to right, #f59e0b, #ef4444)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                   {activeSession.streak || 1}-Day Streak!
                 </h1>
                 
-                <p style={{ fontSize: '14px', opacity: 0.8, margin: '0 0 32px 0', lineHeight: 1.5 }}>
+                <p style={{ fontSize: '15px', color: isDark ? 'var(--text3)' : '#4b5563', margin: '0 0 32px 0', lineHeight: 1.5, fontWeight: 500 }}>
                   Fantastic job completing your <strong>{activeSession.name}</strong> ritual today. You are building strong, persistent habits!
                 </p>
 
-                <Card style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '16px', width: '100%', marginBottom: '32px' }}>
-                  <div style={{ fontSize: '10px', opacity: 0.4, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>Ritual Summary</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '12px' }}>
+                <Card style={{ background: isDark ? 'var(--bg2)' : '#f9fafb', border: `1px solid ${isDark ? 'var(--border)' : 'rgba(0,0,0,0.05)'}`, padding: '20px', width: '100%', marginBottom: '32px', boxShadow: 'none' }}>
+                  <div style={{ fontSize: '11px', color: isDark ? 'var(--text3)' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>Ritual Summary</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: '16px' }}>
                     <div>
-                      <div style={{ fontSize: '20px', fontWeight: 700 }}>{activeSession.steps.length}</div>
-                      <div style={{ fontSize: '9px', opacity: 0.5, marginTop: '2px' }}>Steps Done</div>
+                      <div style={{ fontSize: '24px', fontWeight: 800, color: isDark ? '#fff' : '#111827' }}>{activeSession.steps.length}</div>
+                      <div style={{ fontSize: '11px', color: isDark ? 'var(--text3)' : '#6b7280', marginTop: '4px', fontWeight: 600 }}>Steps Done</div>
                     </div>
-                    <div style={{ width: '1px', background: 'rgba(255,255,255,0.1)' }} />
+                    <div style={{ width: '1px', background: isDark ? 'var(--border)' : 'rgba(0,0,0,0.05)' }} />
                     <div>
-                      <div style={{ fontSize: '20px', fontWeight: 700 }}>100%</div>
-                      <div style={{ fontSize: '9px', opacity: 0.5, marginTop: '2px' }}>Completed</div>
+                      <div style={{ fontSize: '24px', fontWeight: 800, color: isDark ? '#fff' : '#111827' }}>100%</div>
+                      <div style={{ fontSize: '11px', color: isDark ? 'var(--text3)' : '#6b7280', marginTop: '4px', fontWeight: 600 }}>Completed</div>
                     </div>
                   </div>
                 </Card>
@@ -2586,13 +2613,14 @@ export default function DashboardView() {
                   }}
                   style={{
                     width: '100%',
-                    padding: '12px',
+                    padding: '14px',
                     borderRadius: '24px',
-                    fontWeight: 'bold',
-                    fontSize: '13px',
-                    background: 'linear-gradient(to right, #7c6af7, #60a5fa)',
+                    fontWeight: 700,
+                    fontSize: '15px',
+                    background: isDark ? 'var(--text)' : '#111827',
+                    color: isDark ? 'var(--bg)' : '#ffffff',
                     border: 'none',
-                    boxShadow: '0 4px 15px rgba(124, 106, 247, 0.4)'
+                    boxShadow: '0 8px 20px rgba(0,0,0,0.1)'
                   }}
                 >
                   Back to Dashboard
