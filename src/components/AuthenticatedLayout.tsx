@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import TopBar from './TopBar';
 import BottomNav from './BottomNav';
@@ -31,70 +31,106 @@ export function AuthenticatedLayout() {
   }
 
   const handleGlobalToggleTask = (id: number | string) => {
-    let newTaskToSpawn: Task | null = null;
-    
     const updated = state.tasks.map(t => {
       if (String(t.id) === String(id)) {
-        const isCompleting = !t.done;
-        
-        if (isCompleting && t.repeatType && t.repeatType !== 'none') {
-          const currentDateStr = t.date || getLocalDateString();
-          const nextDateStr = getNextOccurrenceDate(currentDateStr, t.repeatType, t.repeatValue || '');
-          
-          if (nextDateStr) {
-            const newTaskId = generateSecureNumericId();
-            let nextRepeatValue = t.repeatValue || '';
-            
-            if (t.repeatType === 'custom' && t.repeatValue) {
-              try {
-                const config = JSON.parse(t.repeatValue);
-                if (config.ends === 'after') {
-                  config.endsAfter = Number(config.endsAfter) - 1;
-                  nextRepeatValue = JSON.stringify(config);
-                }
-              } catch (e) {
-                console.error(e);
-              }
-            }
-            
-            const resetSubtasks = (t.subtasks || []).map((st: any) => ({ ...st, done: false }));
-            
-            newTaskToSpawn = {
-              id: newTaskId,
-              name: t.name,
-              done: false,
-              listId: t.listId,
-              starred: t.starred || false,
-              createdAt: Date.now(),
-              date: nextDateStr,
-              time: t.time,
-              repeatType: t.repeatType,
-              repeatValue: nextRepeatValue,
-              deadline: t.deadline,
-              details: t.details,
-              subtasks: resetSubtasks,
-              cat: '',
-              orderIndex: t.orderIndex
-            };
-          }
-          
-          return {
-            ...t,
-            done: true
-          };
-        }
-        
         return { ...t, done: !t.done };
       }
       return t;
     });
     
-    if (newTaskToSpawn) {
-      store.setState({ tasks: [...updated, newTaskToSpawn] });
-    } else {
-      store.setState({ tasks: updated });
-    }
+    store.setState({ tasks: updated });
   };
+
+  // Automatically wake up completed repeating tasks and sessions when their next occurrence date arrives
+  useEffect(() => {
+    const checkRepeatingItems = () => {
+      const currentState = store.getState();
+      const currentTasks = currentState.tasks;
+      const currentSessions = currentState.sessions;
+      
+      const todayStr = getLocalDateString();
+      const todayDateString = new Date().toDateString();
+      const todayDayOfWeek = new Date().getDay();
+      
+      let stateUpdates: any = {};
+      
+      // 1. Check Tasks
+      if (currentTasks && currentTasks.length > 0) {
+        let hasTaskChanges = false;
+        const updatedTasks = currentTasks.map(t => {
+          if (t.done && t.repeatType && t.repeatType !== 'none') {
+            const currentDateStr = t.date || todayStr;
+            const nextDateStr = getNextOccurrenceDate(currentDateStr, t.repeatType, t.repeatValue || '');
+            
+            if (nextDateStr && todayStr >= nextDateStr) {
+              hasTaskChanges = true;
+              
+              let nextRepeatValue = t.repeatValue || '';
+              if (t.repeatType === 'custom' && t.repeatValue) {
+                try {
+                  const config = JSON.parse(t.repeatValue);
+                  if (config.ends === 'after') {
+                    config.endsAfter = Number(config.endsAfter) - 1;
+                    nextRepeatValue = JSON.stringify(config);
+                  }
+                } catch (e) {
+                  console.error(e);
+                }
+              }
+              
+              const resetSubtasks = (t.subtasks || []).map((st: any) => ({ ...st, done: false }));
+              
+              return {
+                ...t,
+                done: false,
+                date: nextDateStr,
+                repeatValue: nextRepeatValue,
+                subtasks: resetSubtasks
+              };
+            }
+          }
+          return t;
+        });
+        
+        if (hasTaskChanges) {
+          stateUpdates.tasks = updatedTasks;
+        }
+      }
+      
+      // 2. Check Sessions
+      if (currentSessions && currentSessions.length > 0) {
+        let hasSessionChanges = false;
+        const updatedSessions = currentSessions.map(s => {
+          const isScheduledToday = !s.repeatType || s.repeatType === 'daily' || (s.repeatType === 'weekly' && s.repeatDays?.includes(todayDayOfWeek));
+          
+          if (isScheduledToday && s.lastCompletedDate !== todayDateString) {
+            const hasDoneSteps = s.steps.some(st => st.done);
+            if (hasDoneSteps) {
+              hasSessionChanges = true;
+              return {
+                ...s,
+                steps: s.steps.map(st => ({ ...st, done: false, currentCount: 0 }))
+              };
+            }
+          }
+          return s;
+        });
+        
+        if (hasSessionChanges) {
+          stateUpdates.sessions = updatedSessions;
+        }
+      }
+      
+      if (Object.keys(stateUpdates).length > 0) {
+        store.setState(stateUpdates);
+      }
+    };
+
+    checkRepeatingItems();
+
+    const intervalId = setInterval(checkRepeatingItems, 60000);
+    return () => clearInterval(intervalId);
+  }, [state.tasks, state.sessions]);
 
   const handleGlobalDeleteTask = (id: number | string) => {
     const updated = state.tasks.filter(t => String(t.id) !== String(id));
