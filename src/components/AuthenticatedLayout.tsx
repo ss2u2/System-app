@@ -7,8 +7,7 @@ import SyncConfig from './SyncConfig';
 import TaskDetailView from './TaskDetailView';
 import { useAppState } from '../hooks/useAppState';
 import { store } from '../services/db';
-import type { Task } from '../types';
-import { getLocalDateString, getNextOccurrenceDate, generateSecureNumericId } from '../utils/taskHelper';
+import { getLocalDateString, getNextOccurrenceDate } from '../utils/taskHelper';
 
 export function AuthenticatedLayout() {
   const state = useAppState(s => s);
