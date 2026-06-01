@@ -2084,13 +2084,10 @@ export default function DashboardView() {
             const progressPct = totalSteps ? ((currentStepIdx) / totalSteps) * 100 : 0;
             const stepColorHex = colorMap[activeSession.color] || '#7c6af7';
             const stepBgHex = colorBgMap[activeSession.color] || (isDark ? '#1e1a3a' : '#f3f4f6');
-            const r = 90;
-            const circ = 2 * Math.PI * r;
             const totalSecs = currentStep && currentStep.type === 'timer' ? parseInt(currentStep.dur || '5', 10) * 60 : 0;
             const timerPct = totalSecs ? (timeLeft / totalSecs) * 100 : 0;
-            const timerOffset = circ - (timerPct / 100) * circ;
 
-            const formatTime = (s) => {
+            const formatTime = (s: number) => {
               const mins = Math.floor(s / 60);
               const secs = s % 60;
               return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
