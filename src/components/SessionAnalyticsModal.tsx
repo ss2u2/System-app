@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { AppState, Session } from '../types';
 import AnalyticsModal from './AnalyticsModal';
-import { IconFlame, IconTrophy, IconArrowLeft, IconCheck, IconX, IconChevronRight } from '@tabler/icons-react';
+import { IconFlame, IconTrophy, IconArrowLeft, IconChevronRight } from '@tabler/icons-react';
 
 interface SessionAnalyticsModalProps {
   isOpen: boolean;
@@ -26,13 +26,10 @@ export default function SessionAnalyticsModal({ isOpen, onClose, state }: Sessio
     
     // Simple calendar logic
     const today = new Date();
-    const daysToRender = view === 'weekly' ? 7 : view === 'monthly' ? 35 : 365; // Use 35 for 5 weeks
     
     // Instead of rendering a flat list, we need to generate standard calendar cells if we are in monthly/yearly view.
     const renderGrid = (startDate: Date, numDays: number, showMonthHeaders = false) => {
       const days = [];
-      const currentMonth = startDate.getMonth();
-      const currentYear = startDate.getFullYear();
       
       // Calculate offset so we start on Sunday (0)
       const firstDayOffset = new Date(startDate).getDay();
@@ -50,7 +47,6 @@ export default function SessionAnalyticsModal({ isOpen, onClose, state }: Sessio
         }
         
         const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const dayOfWeek = (d.getDay() || 7) - 1; // 0=Mon, 6=Sun
         
         // Use true JS Day (0=Sun, 6=Sat) for standard grid logic
         const jsDayOfWeek = d.getDay(); 

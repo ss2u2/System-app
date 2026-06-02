@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import type { AppState, ActivityLog } from '../types';
+import type { AppState } from '../types';
 import { IconCheck, IconTarget, IconFlame, IconTrophy, IconHistory } from '@tabler/icons-react';
 import TaskAnalyticsModal from '../components/TaskAnalyticsModal';
 import SessionAnalyticsModal from '../components/SessionAnalyticsModal';
@@ -32,24 +32,7 @@ export default function ProgressView() {
 
 
 
-  // Group activity logs by date, sorting newest to oldest
-  const timeline = useMemo(() => {
-    const logs = state.activityLogs || [];
-    const grouped: Record<string, ActivityLog[]> = {};
-    
-    logs.forEach(log => {
-      if (!grouped[log.date]) {
-        grouped[log.date] = [];
-      }
-      grouped[log.date].push(log);
-    });
 
-    const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-    return sortedDates.map(date => ({
-      date,
-      activities: grouped[date]
-    }));
-  }, [state.activityLogs]);
 
   return (
     <div className="main-view active" style={{ overflowY: 'auto', padding: '20px', paddingBottom: '100px' }}>

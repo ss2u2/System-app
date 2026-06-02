@@ -1,7 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { AppState, ActivityLog } from '../types';
 import AnalyticsModal from './AnalyticsModal';
-import { IconCalendarEvent, IconListDetails, IconTrophy } from '@tabler/icons-react';
 
 interface TimelineModalProps {
   isOpen: boolean;

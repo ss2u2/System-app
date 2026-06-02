@@ -108,7 +108,8 @@ const defaultState: AppState = {
     tasks: [],
     sessions: [],
     notebooks: [],
-    lists: []
+    lists: [],
+    activityLogs: []
   }
 };
 
@@ -325,7 +326,8 @@ function migrateUuidIds(s: AppState): AppState {
       tasks: (s.deletedIds.tasks || []).map(Number).filter(n => !isNaN(n)),
       sessions: (s.deletedIds.sessions || []).map(Number).filter(n => !isNaN(n)),
       notebooks: (s.deletedIds.notebooks || (s.deletedIds as any).diaries || (s.deletedIds as any).journals || []).map(Number).filter(n => !isNaN(n)),
-      lists: (s.deletedIds.lists || []).map(Number).filter(n => !isNaN(n))
+      lists: (s.deletedIds.lists || []).map(Number).filter(n => !isNaN(n)),
+      activityLogs: (s.deletedIds.activityLogs || [])
     };
     if (JSON.stringify(s.deletedIds) !== JSON.stringify(cleanDeleted) || (s.deletedIds as any).diaries || (s.deletedIds as any).journals) {
       migrated = true;
@@ -382,9 +384,10 @@ function loadInitialState(): AppState {
     ];
     parsed.lists = [...parsed.lists].sort((a: any, b: any) => (a.orderIndex || 0) - (b.orderIndex || 0));
     if (!parsed.deletedIds) {
-      parsed.deletedIds = { tasks: [], sessions: [], notebooks: [], lists: [] };
+      parsed.deletedIds = { tasks: [], sessions: [], notebooks: [], lists: [], activityLogs: [] };
     } else {
       parsed.deletedIds.lists = parsed.deletedIds.lists || [];
+      parsed.deletedIds.activityLogs = parsed.deletedIds.activityLogs || [];
       if ((parsed.deletedIds as any).diaries) {
         parsed.deletedIds.notebooks = [...(parsed.deletedIds.notebooks || []), ...(parsed.deletedIds as any).diaries];
         delete (parsed.deletedIds as any).diaries;

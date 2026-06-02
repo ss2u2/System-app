@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import type { AppState, ActivityLog } from '../types';
+import { useState, useMemo } from 'react';
+import type { AppState } from '../types';
 import AnalyticsModal from './AnalyticsModal';
-import { IconChartBar, IconListDetails, IconCalendarEvent } from '@tabler/icons-react';
+import { IconChartBar, IconListDetails } from '@tabler/icons-react';
 
 interface TaskAnalyticsModalProps {
   isOpen: boolean;
