@@ -50,9 +50,10 @@ export function triggerSync(): void {
         lists: [],
         notebooks: [],
         completionHistory: {},
+        activityLogs: [],
         streak: 0,
         lastActiveDate: '',
-        deletedIds: { tasks: [], sessions: [], notebooks: [], lists: [] }
+        deletedIds: { tasks: [], sessions: [], notebooks: [], lists: [], activityLogs: [] }
       };
     }
 
@@ -143,6 +144,22 @@ export function triggerSync(): void {
         prevProfile.streak !== currProfile.streak ||
         prevProfile.lastActiveDate !== currProfile.lastActiveDate ||
         JSON.stringify(prevProfile.completionHistory) !== JSON.stringify(currProfile.completionHistory);
+
+      // 7. Activity Logs
+      const prevLogs = lastSyncedState.activityLogs || [];
+      const currLogs = state.activityLogs || [];
+      const logsToUpsert = currLogs.filter(l => {
+        const prev = prevLogs.find(p => String(p.id) === String(l.id));
+        if (!prev) return true;
+        return (
+          prev.date !== l.date ||
+          String(prev.itemId) !== String(l.itemId) ||
+          prev.itemType !== l.itemType ||
+          prev.action !== l.action ||
+          prev.name !== l.name
+        );
+      });
+      const logsToDelete = state.deletedIds?.activityLogs || [];
 
       let hasSynced = false;
 
@@ -291,13 +308,34 @@ export function triggerSync(): void {
         hasSynced = true;
       }
 
+      // 7. Sync Activity Logs
+      if (logsToUpsert.length > 0) {
+        const payloads = logsToUpsert.map(l => ({
+          id: l.id,
+          user_id: userId,
+          date: l.date,
+          item_id: String(l.itemId),
+          item_type: l.itemType,
+          action: l.action,
+          name: l.name
+        }));
+        const { error } = await client.from('activity_logs').upsert(payloads, { onConflict: 'id' });
+        if (error) console.error('Supabase upsert error [activity_logs]:', error.message);
+        hasSynced = true;
+      }
+      if (logsToDelete.length > 0) {
+        const { error } = await client.from('activity_logs').delete().in('id', logsToDelete);
+        if (error) console.error('Supabase delete error [activity_logs]:', error.message);
+        hasSynced = true;
+      }
+
       // Baseline synced state
       lastSyncedState = JSON.parse(JSON.stringify(state));
 
       // Reset deletedIds state locally in one single update
       if (storeRef) {
         storeRef.setState({
-          deletedIds: { tasks: [], sessions: [], notebooks: [], lists: [] }
+          deletedIds: { tasks: [], sessions: [], notebooks: [], lists: [], activityLogs: [] }
         }, true);
       }
 
@@ -380,13 +418,15 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
       tasksData,
       sessionsData,
       notebooksData,
-      profileData
+      profileData,
+      logsData
     ] = await Promise.all([
       fetchTable('lists'),
       fetchTasksWithSubtasks(),
       fetchTable('sessions'),
       fetchTable('journals'), // remains 'journals' table in DB
-      fetchProfile()
+      fetchProfile(),
+      fetchTable('activity_logs')
     ]);
 
     const newState: Partial<import('../types').AppState> = {};
@@ -487,6 +527,16 @@ export async function pullSyncData(): Promise<Partial<import('../types').AppStat
           themePattern: j.theme_pattern || 'blank'
         };
       });
+    }
+    if (logsData) {
+      newState.activityLogs = logsData.map((l: any) => ({
+        id: String(l.id),
+        date: l.date,
+        itemId: l.item_id,
+        itemType: l.item_type,
+        action: l.action,
+        name: l.name
+      }));
     }
     if (profileData) {
       newState.streak = profileData.streak;

@@ -53,11 +53,21 @@ export interface NotebookEntry {
   themePattern?: string;
 }
 
+export interface ActivityLog {
+  id: string;
+  date: string; // YYYY-MM-DD
+  itemId: number | string;
+  itemType: 'session' | 'task';
+  action: 'completed' | 'missed';
+  name: string;
+}
+
 export interface DeletedIds {
   tasks: (number | string)[];
   sessions: (number | string)[];
   notebooks: (number | string)[];
   lists: (number | string)[];
+  activityLogs: (number | string)[];
 }
 
 export interface AppState {
@@ -66,6 +76,7 @@ export interface AppState {
   lists: CustomList[];
   notebooks: NotebookEntry[];
   completionHistory: Record<string, number>;
+  activityLogs: ActivityLog[];
   streak: number;
   lastActiveDate: string;
   deletedIds: DeletedIds;

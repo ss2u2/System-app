@@ -1,10 +1,14 @@
-import { type ReactNode } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-
-import type { AppState } from '../types';
+import type { AppState, ActivityLog } from '../types';
+import { IconCheck, IconTarget, IconFlame, IconTrophy, IconHistory } from '@tabler/icons-react';
+import TaskAnalyticsModal from '../components/TaskAnalyticsModal';
+import SessionAnalyticsModal from '../components/SessionAnalyticsModal';
+import TimelineModal from '../components/TimelineModal';
 
 export default function ProgressView() {
   const { state } = useOutletContext<{ state: AppState }>();
+
   // Calculate today's details
   const getTodayStats = () => {
     const all = [
@@ -15,7 +19,7 @@ export default function ProgressView() {
     const score = all.length ? Math.round((done / all.length) * 100) : 0;
     const tasksDone = (state.tasks || []).filter((t) => t.done).length;
     const sessionsDone = (state.sessions || []).filter((s) =>
-      (s.steps || []).every((x) => x.done)
+      (s.steps || []).length > 0 && (s.steps || []).every((x) => x.done)
     ).length;
 
     return { score, tasksDone, sessionsDone };
@@ -23,66 +27,96 @@ export default function ProgressView() {
 
   const { score, tasksDone, sessionsDone } = getTodayStats();
 
-  // Generate 14-day activity history
-  const render14DayActivity = () => {
-    const days: ReactNode[] = [];
-    const now = new Date();
+  // Overlay state
+  const [activeModal, setActiveModal] = useState<'tasks' | 'sessions' | 'timeline' | null>(null);
 
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      const dateStr = d.toDateString();
-      const pct = state.completionHistory?.[dateStr] ?? 0;
-      const isToday = i === 0;
 
-      let cls = 'streak-day';
-      // If completed at least 50% of goals that day, mark it green/active
-      if (pct >= 50 && !isToday) {
-        cls += ' done';
+
+  // Group activity logs by date, sorting newest to oldest
+  const timeline = useMemo(() => {
+    const logs = state.activityLogs || [];
+    const grouped: Record<string, ActivityLog[]> = {};
+    
+    logs.forEach(log => {
+      if (!grouped[log.date]) {
+        grouped[log.date] = [];
       }
-      if (isToday) {
-        cls += ' today';
-      }
+      grouped[log.date].push(log);
+    });
 
-      days.push(
-        <div key={i} className={cls} title={`${dateStr}: ${pct}% completed`}>
-          {d.getDate()}
-        </div>
-      );
-    }
-    return days;
-  };
+    const sortedDates = Object.keys(grouped).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    return sortedDates.map(date => ({
+      date,
+      activities: grouped[date]
+    }));
+  }, [state.activityLogs]);
 
   return (
-    <div className="main-view active" style={{ overflowY: 'auto', padding: '20px' }}>
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-val">{state.streak || 0}</div>
-          <div className="stat-lbl">Day streak</div>
-          <div className="stat-sub">Personal best!</div>
+    <div className="main-view active" style={{ overflowY: 'auto', padding: '20px', paddingBottom: '100px' }}>
+      
+      {/* Stats Header Grid */}
+      <div className="stats-grid" style={{ marginBottom: '24px' }}>
+        <div className="stat-card" style={{ background: 'var(--bg2)', border: '1px solid var(--border)' }}>
+          <div className="stat-val" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {state.streak || 0}
+            <IconFlame size={20} color="#f59e0b" />
+          </div>
+          <div className="stat-lbl">Global Day Streak</div>
+          <div className="stat-sub">Keep it up!</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-val">{score}%</div>
+        <div className="stat-card" style={{ background: 'var(--bg2)', border: '1px solid var(--border)' }}>
+          <div className="stat-val" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {score}%
+            <IconTarget size={20} color="var(--accent)" />
+          </div>
           <div className="stat-lbl">Today's score</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-val">{tasksDone}</div>
+        <div 
+          className="stat-card clickable" 
+          style={{ background: 'var(--bg2)', border: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.2s' }}
+          onClick={() => setActiveModal('tasks')}
+          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--text)'}
+          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+        >
+          <div className="stat-val" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {tasksDone}
+            <IconCheck size={20} color="#10b981" />
+          </div>
           <div className="stat-lbl">Tasks done today</div>
+          <div className="stat-sub" style={{ color: 'var(--accent)' }}>View insights &rarr;</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-val">{sessionsDone}</div>
+        <div 
+          className="stat-card clickable" 
+          style={{ background: 'var(--bg2)', border: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.2s' }}
+          onClick={() => setActiveModal('sessions')}
+          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--text)'}
+          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+        >
+          <div className="stat-val" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {sessionsDone}
+            <IconTrophy size={20} color="#8b5cf6" />
+          </div>
           <div className="stat-lbl">Sessions completed</div>
+          <div className="stat-sub" style={{ color: 'var(--accent)' }}>View insights &rarr;</div>
+        </div>
+        <div 
+          className="stat-card clickable" 
+          style={{ background: 'var(--bg2)', border: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.2s', gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          onClick={() => setActiveModal('timeline')}
+          onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--text)'}
+          onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+        >
+          <div>
+            <div className="stat-lbl" style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text)' }}>Progress Timeline</div>
+            <div className="stat-sub">Review your historical activity</div>
+          </div>
+          <IconHistory size={24} color="var(--accent)" />
         </div>
       </div>
 
-      <div className="sec-hdr">
-        <span className="sec-title">14-day activity</span>
-      </div>
-      <div className="prog-bar-wrap">
-        <div className="streak-bar">{render14DayActivity()}</div>
-      </div>
-
-
+      <TaskAnalyticsModal isOpen={activeModal === 'tasks'} onClose={() => setActiveModal(null)} state={state} />
+      <SessionAnalyticsModal isOpen={activeModal === 'sessions'} onClose={() => setActiveModal(null)} state={state} />
+      <TimelineModal isOpen={activeModal === 'timeline'} onClose={() => setActiveModal(null)} state={state} />
     </div>
   );
 }

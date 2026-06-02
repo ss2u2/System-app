@@ -8,6 +8,7 @@ import TaskDetailView from './TaskDetailView';
 import { useAppState } from '../hooks/useAppState';
 import { store } from '../services/db';
 import { getLocalDateString, getNextOccurrenceDate } from '../utils/taskHelper';
+import { logActivity } from '../utils/activityHelper';
 
 export function AuthenticatedLayout() {
   const state = useAppState(s => s);
@@ -65,14 +66,21 @@ export function AuthenticatedLayout() {
   };
 
   const handleGlobalToggleTask = (id: number | string) => {
+    let taskName = '';
+    let isDone = false;
     const updated = state.tasks.map(t => {
       if (String(t.id) === String(id)) {
-        return { ...t, done: !t.done };
+        taskName = t.name;
+        isDone = !t.done;
+        return { ...t, done: isDone };
       }
       return t;
     });
     
     store.setState({ tasks: updated });
+    if (taskName) {
+      logActivity(id, 'task', isDone ? 'completed' : 'missed', taskName);
+    }
   };
 
   // Automatically wake up completed repeating tasks and sessions when their next occurrence date arrives

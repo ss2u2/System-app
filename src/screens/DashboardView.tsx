@@ -31,6 +31,7 @@ import type { AppState, Task, Session, Step } from '../types';
 import TaskItem from '../components/TaskItem';
 import AddTaskModal from '../components/AddTaskModal';
 import { generateSecureNumericId, getLocalDateString } from '../utils/taskHelper';
+import { calculateNewSessionStreak } from '../utils/streakHelper';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import { useTheme } from '../context/ThemeContext';
 // Import UI Design System components
@@ -752,13 +753,31 @@ export default function DashboardView() {
   // Handlers
   const toggleTodaySession = (index: number) => {
     const updated = [...state.sessions];
-    updated[index].open = !updated[index].open;
+    updated[index] = { ...updated[index], open: !updated[index].open };
     store.setState({ sessions: updated });
   };
 
   const toggleStep = (sessIndex: number, stepIndex: number) => {
     const updated = [...state.sessions];
-    updated[sessIndex].steps[stepIndex].done = !updated[sessIndex].steps[stepIndex].done;
+    const session = { ...updated[sessIndex] };
+    const steps = [...session.steps];
+    steps[stepIndex] = { ...steps[stepIndex], done: !steps[stepIndex].done };
+    session.steps = steps;
+    updated[sessIndex] = session;
+    
+    // Evaluate streak directly when manually checking off steps
+    const allDone = session.steps.length > 0 && session.steps.every(s => s.done);
+    const todayStr = new Date().toDateString();
+    
+    if (allDone && session.lastCompletedDate !== todayStr) {
+      session.streak = calculateNewSessionStreak(session, todayStr);
+      session.lastCompletedDate = todayStr;
+    } else if (!allDone && session.lastCompletedDate === todayStr) {
+      // Un-done today
+      session.streak = Math.max(0, (session.streak || 1) - 1);
+      session.lastCompletedDate = ''; // Resets it, although not perfect historical track
+    }
+
     store.setState({ sessions: updated });
   };
 
@@ -1001,26 +1020,7 @@ export default function DashboardView() {
       let newStreak = activeSession.streak || 0;
       if (sessionIndex !== -1) {
         const lastSession = dbSessions[sessionIndex];
-        const lastDate = lastSession.lastCompletedDate;
-        
-        if (lastDate) {
-          const last = new Date(lastDate);
-          const today = new Date(todayStr);
-          last.setHours(0,0,0,0);
-          today.setHours(0,0,0,0);
-          const diffTime = today.getTime() - last.getTime();
-          const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-          
-          if (diffDays === 1) {
-            newStreak = (lastSession.streak || 0) + 1;
-          } else if (diffDays > 1) {
-            newStreak = 1;
-          } else {
-            newStreak = lastSession.streak || 1;
-          }
-        } else {
-          newStreak = 1;
-        }
+        newStreak = calculateNewSessionStreak(lastSession, todayStr);
         
         dbSessions[sessionIndex] = {
           ...lastSession,

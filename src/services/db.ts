@@ -101,6 +101,7 @@ const defaultState: AppState = {
     [getPastDateString(2)]: 0,
     [getPastDateString(1)]: 100,
   },
+  activityLogs: [],
   streak: 7,
   lastActiveDate: new Date().toDateString(),
   deletedIds: {
@@ -477,7 +478,83 @@ export const store: AppStore = {
     if (newState && (newState as any)._reset) {
       state = JSON.parse(JSON.stringify(defaultState));
     } else {
-      state = { ...state, ...newState } as AppState;
+      const today = new Date();
+      // standard YYYY-MM-DD local time
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      let newLogs = [...(state.activityLogs || [])];
+      let logsChanged = false;
+
+      // Detect Task Completions
+      if ((newState as AppState).tasks) {
+        (newState as AppState).tasks.forEach(newTask => {
+          const oldTask = state.tasks?.find(t => t.id === newTask.id);
+          if (oldTask && !oldTask.done && newTask.done) {
+            if (!newLogs.some(l => l.itemId === newTask.id && l.itemType === 'task' && l.date === todayStr && l.action === 'completed')) {
+              newLogs.push({
+                id: generateSecureNumericId().toString(),
+                date: todayStr,
+                itemId: newTask.id,
+                itemType: 'task',
+                action: 'completed',
+                name: newTask.name
+              });
+              logsChanged = true;
+            }
+          } else if (oldTask && oldTask.done && !newTask.done) {
+            const idx = newLogs.findIndex(l => String(l.itemId) === String(newTask.id) && l.itemType === 'task' && l.date === todayStr && l.action === 'completed');
+            if (idx !== -1) {
+              const deletedLog = newLogs[idx];
+              newLogs.splice(idx, 1);
+              logsChanged = true;
+              if (deletedLog.id) {
+                if (!state.deletedIds) state.deletedIds = { tasks: [], sessions: [], notebooks: [], lists: [], activityLogs: [] };
+                if (!state.deletedIds.activityLogs) state.deletedIds.activityLogs = [];
+                state.deletedIds.activityLogs.push(deletedLog.id);
+              }
+            }
+          }
+        });
+      }
+
+      // Detect Session Completions
+      if ((newState as AppState).sessions) {
+        (newState as AppState).sessions.forEach(newSession => {
+          const oldSession = state.sessions?.find(s => s.id === newSession.id);
+          if (oldSession) {
+            const oldDone = oldSession.steps.length > 0 && oldSession.steps.every(st => st.done);
+            const newDone = newSession.steps.length > 0 && newSession.steps.every(st => st.done);
+            
+            if (!oldDone && newDone) {
+              if (!newLogs.some(l => l.itemId === newSession.id && l.itemType === 'session' && l.date === todayStr && l.action === 'completed')) {
+                newLogs.push({
+                  id: generateSecureNumericId().toString(),
+                  date: todayStr,
+                  itemId: newSession.id,
+                  itemType: 'session',
+                  action: 'completed',
+                  name: newSession.name
+                });
+                logsChanged = true;
+              }
+            } else if (oldDone && !newDone) {
+              const idx = newLogs.findIndex(l => String(l.itemId) === String(newSession.id) && l.itemType === 'session' && l.date === todayStr && l.action === 'completed');
+              if (idx !== -1) {
+                const deletedLog = newLogs[idx];
+                newLogs.splice(idx, 1);
+                logsChanged = true;
+                if (deletedLog.id) {
+                  if (!state.deletedIds) state.deletedIds = { tasks: [], sessions: [], notebooks: [], lists: [], activityLogs: [] };
+                  if (!state.deletedIds.activityLogs) state.deletedIds.activityLogs = [];
+                  state.deletedIds.activityLogs.push(deletedLog.id);
+                }
+              }
+            }
+          }
+        });
+      }
+      
+      const toMerge = logsChanged ? { ...newState, activityLogs: newLogs } : newState;
+      state = { ...state, ...toMerge } as AppState;
     }
     
     // Save to local cache encrypted

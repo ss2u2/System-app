@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface DropdownProps {
   trigger: React.ReactNode;
@@ -109,26 +110,27 @@ export function Dropdown({ trigger, children, align = 'right', className = '' }:
       <div onClick={toggleDropdown} style={{ display: 'inline-flex', cursor: 'pointer' }}>
         {trigger}
       </div>
-      {isOpen && (
-        <>
+      {isOpen && createPortal(
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 9999 }}>
           <div
             className="dropdown-backdrop"
             onClick={(e) => {
               e.stopPropagation();
               setIsOpen(false);
             }}
+            style={{ position: 'fixed', inset: 0, zIndex: 1000 }}
           />
           <div
             ref={dropdownRef}
             className={`tasks-dropdown-menu ${openUp ? 'open-up' : ''}`}
             style={{
-              position: 'absolute',
-              top: openUp ? 'auto' : 'calc(100% + 4px)',
-              bottom: openUp ? 'calc(100% + 4px)' : 'auto',
-              right: align === 'right' ? 0 : 'auto',
-              left: align === 'left' ? 0 : 'auto',
+              position: 'fixed',
+              top: openUp ? 'auto' : (containerRef.current?.getBoundingClientRect().bottom || 0) + 4,
+              bottom: openUp ? window.innerHeight - (containerRef.current?.getBoundingClientRect().top || 0) + 4 : 'auto',
+              left: align === 'left' ? (containerRef.current?.getBoundingClientRect().left || 0) : 'auto',
+              right: align === 'right' ? window.innerWidth - (containerRef.current?.getBoundingClientRect().right || 0) : 'auto',
               display: 'block',
-              zIndex: 999,
+              zIndex: 1001,
             }}
             onClick={handleChildrenClick}
           >
@@ -136,7 +138,8 @@ export function Dropdown({ trigger, children, align = 'right', className = '' }:
               {children}
             </div>
           </div>
-        </>
+        </div>,
+        document.body
       )}
     </div>
   );
